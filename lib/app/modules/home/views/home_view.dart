@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/engine_data.dart';
 import '../../../core/theme/app_colors.dart';
@@ -141,11 +142,16 @@ class _HeroSection extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                onPressed: () {
+                                onPressed: () async {
                                   FirebaseAnalytics.instance.logEvent(
                                     name: 'examples_button_tapped',
                                   );
-                                  context.router.pushPath('/examples');
+                                  await launchUrl(
+                                    Uri.parse(
+                                      'https://examples.engine.justunknown.com/',
+                                    ),
+                                    webOnlyWindowName: '_blank',
+                                  );
                                 },
                                 child: const Text('Examples'),
                               ),
@@ -187,11 +193,16 @@ class _HeroSection extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
-                                onPressed: () {
+                                onPressed: () async {
                                   FirebaseAnalytics.instance.logEvent(
                                     name: 'examples_button_tapped',
                                   );
-                                  context.router.pushPath('/examples');
+                                  await launchUrl(
+                                    Uri.parse(
+                                      'https://examples.engine.justunknown.com/',
+                                    ),
+                                    webOnlyWindowName: '_blank',
+                                  );
                                 },
                                 child: const Text('Examples'),
                               ),

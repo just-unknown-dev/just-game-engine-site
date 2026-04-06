@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+// ignore: depend_on_referenced_packages
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_game_engine_site/app/core/services/remote_config_service.dart';
 import 'package:just_game_engine_site/app/core/theme/app_colors.dart';
@@ -13,11 +14,11 @@ final _appRouter = AppRouter();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
 
   // Fix 2: Disable runtime font fetching initially
   GoogleFonts.config.allowRuntimeFetching = false;
 
-  await dotenv.load(fileName: '.env');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   RemoteConfigService.instance.initialize();
   runApp(const MyApp());

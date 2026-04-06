@@ -5,7 +5,7 @@ import 'engine_models.dart';
 /// Roadmap data for the Roadmap page.
 abstract final class RoadmapData {
   static const List<RoadmapItem> roadmapItems = [
-    // Q1 2026 - All 11 Engine Subsystems Completed
+    // Q1 2026 - Core 1.x foundation and feature expansion
     RoadmapItem(
       title: 'Core Engine v1.0',
       description:
@@ -72,7 +72,7 @@ abstract final class RoadmapData {
     RoadmapItem(
       title: 'Entity-Component System v1.0',
       description:
-          'Data-oriented ECS with 13 built-in components, 9 systems, entity queries, and hierarchy support.',
+          'Data-oriented ECS with 14 built-in components, 9 systems, entity queries, and hierarchy support.',
       status: 'Completed',
       quarter: 'Q1 2026',
       icon: Icons.widgets,
@@ -86,6 +86,24 @@ abstract final class RoadmapData {
       quarter: 'Q1 2026',
       icon: Icons.gamepad,
       tags: ['Input', 'Gameplay'],
+    ),
+    RoadmapItem(
+      title: 'Parallax Background System v1.0',
+      description:
+          'First-class multi-layer parallax backgrounds with camera-relative depth scrolling and auto-scroll.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.layers,
+      tags: ['Parallax', 'Visual'],
+    ),
+    RoadmapItem(
+      title: 'Virtual Joystick Widget v1.0',
+      description:
+          'Reusable touch joystick with fixed/floating layouts and ECS joystick component integration.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.touch_app,
+      tags: ['Input', 'Mobile'],
     ),
     RoadmapItem(
       title: 'Asset Management v1.0',
@@ -120,19 +138,28 @@ abstract final class RoadmapData {
       title: 'Raycasting v1.0',
       description:
           '2D raycasting system for line-of-sight, shooting mechanics, and visibility checks.',
-      status: 'In Progress',
+      status: 'Completed',
       quarter: 'Q2 2026',
       icon: Icons.linear_scale_rounded,
-      tags: ['Physics', 'Performance'],
+      tags: ['Raycasting', 'Gameplay'],
     ),
     RoadmapItem(
       title: 'Tilemap Editor Integration',
       description:
-          'Native support for Tiled and LDtk map formats with auto-collision generation.',
-      status: 'In Progress',
+          'Native support for Tiled map formats via just_tiled with GPU-batched rendering.',
+      status: 'Completed',
       quarter: 'Q2 2026',
       icon: Icons.grid_on,
       tags: ['Tilemaps', 'Tools'],
+    ),
+    RoadmapItem(
+      title: 'Reactive ECS v1.0',
+      description:
+          'Signal-driven ECS wrappers via just_signals for surgical UI updates without polling.',
+      status: 'Completed',
+      quarter: 'Q2 2026',
+      icon: Icons.bolt,
+      tags: ['ECS', 'Reactive'],
     ),
     RoadmapItem(
       title: 'Documentation Overhaul',

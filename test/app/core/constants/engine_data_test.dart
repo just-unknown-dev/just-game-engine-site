@@ -3,8 +3,8 @@ import 'package:just_game_engine_site/app/core/constants/engine_data.dart';
 
 void main() {
   group('EngineData', () {
-    test('contains all 11 subsystems', () {
-      expect(EngineData.subsystems, hasLength(11));
+    test('contains all configured subsystems', () {
+      expect(EngineData.subsystems, hasLength(14));
     });
 
     test('each subsystem has required fields populated', () {
@@ -57,28 +57,6 @@ void main() {
 
     test('gettingStartedCode is not empty', () {
       expect(EngineData.gettingStartedCode, isNotEmpty);
-    });
-
-    test('examples list is not empty', () {
-      expect(EngineData.examples, isNotEmpty);
-    });
-
-    test('each example has required fields', () {
-      for (final ex in EngineData.examples) {
-        expect(ex.id, isNotEmpty, reason: 'Example has empty id');
-        expect(ex.title, isNotEmpty, reason: '${ex.id} has empty title');
-        expect(
-          ex.description,
-          isNotEmpty,
-          reason: '${ex.id} has empty description',
-        );
-        expect(ex.code, isNotEmpty, reason: '${ex.id} has empty code');
-      }
-    });
-
-    test('example ids are unique', () {
-      final ids = EngineData.examples.map((e) => e.id).toList();
-      expect(ids.toSet().length, ids.length);
     });
 
     test('flameComparison list is not empty', () {

@@ -9,12 +9,10 @@
 /// - [home_data.dart] - Home page data (comparison, getting started)
 
 export 'engine_models.dart';
-export 'examples_data.dart';
 export 'home_data.dart';
 export 'roadmap_data.dart';
 export 'subsystems_data.dart';
 
-import 'examples_data.dart';
 import 'engine_models.dart';
 import 'home_data.dart';
 import 'roadmap_data.dart';
@@ -32,9 +30,6 @@ abstract final class EngineData {
 
   /// Getting started code example.
   static const String gettingStartedCode = HomeData.gettingStartedCode;
-
-  /// Code examples for the Examples page.
-  static const List<EngineExample> examples = ExamplesData.examples;
 
   /// Flame comparison points for the Home page.
   static const List<ComparisonPoint> flameComparison = HomeData.flameComparison;

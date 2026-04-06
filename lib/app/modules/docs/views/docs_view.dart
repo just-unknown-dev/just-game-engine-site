@@ -259,12 +259,14 @@ class _DocsSidebar extends StatelessWidget {
     _SidebarGroup('Core Systems', [_SidebarItem('core', 'Core Engine')]),
     _SidebarGroup('Visual', [
       _SidebarItem('rendering', 'Rendering Engine'),
+      _SidebarItem('parallax', 'Parallax Background System'),
       _SidebarItem('sprites', 'Sprite System'),
       _SidebarItem('animation', 'Animation System'),
       _SidebarItem('particles', 'Particle Effects'),
     ]),
     _SidebarGroup('Gameplay', [
       _SidebarItem('physics', 'Physics Engine'),
+      _SidebarItem('raycasting', 'Ray Casting & Tracing'),
       _SidebarItem('scene-graph', 'Scene Graph'),
       _SidebarItem('ecs', 'Entity-Component System'),
       _SidebarItem('input', 'Input Management'),
@@ -272,6 +274,7 @@ class _DocsSidebar extends StatelessWidget {
     _SidebarGroup('Utilities', [
       _SidebarItem('assets', 'Asset Management'),
       _SidebarItem('audio', 'Audio Engine'),
+      _SidebarItem('tiledmap', 'Tiled Map Support'),
     ]),
   ];
 

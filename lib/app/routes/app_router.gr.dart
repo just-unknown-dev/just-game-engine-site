@@ -59,22 +59,6 @@ class DocsRouteArgs {
 }
 
 /// generated route for
-/// [ExamplesView]
-class ExamplesRoute extends PageRouteInfo<void> {
-  const ExamplesRoute({List<PageRouteInfo>? children})
-    : super(ExamplesRoute.name, initialChildren: children);
-
-  static const String name = 'ExamplesRoute';
-
-  static PageInfo page = PageInfo(
-    name,
-    builder: (data) {
-      return const ExamplesView();
-    },
-  );
-}
-
-/// generated route for
 /// [FeaturesView]
 class FeaturesRoute extends PageRouteInfo<void> {
   const FeaturesRoute({List<PageRouteInfo>? children})

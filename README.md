@@ -86,5 +86,5 @@ lib/
 
 - [Just Game Engine (pub.dev)](https://pub.dev/packages/just_game_engine)
 - [GitHub](https://github.com/just-unknown-dev/just-game-engine)
-- [Discord](https://discord.gg/AaAZayn3)
+- [Discord](https://discord.gg/VXFxVj4Y)
 - [justunknown.com](https://justunknown.com)

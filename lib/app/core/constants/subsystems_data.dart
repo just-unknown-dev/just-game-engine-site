@@ -44,30 +44,74 @@ import 'package:just_game_engine/just_game_engine.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize the engine
-  final engine = Engine();
-  await engine.initialize();
-
-  // Set up your game
-  setupGame(engine);
-
-  // Start the engine
-  engine.start();
-
-  // Run your Flutter app
-  runApp(MyGameApp(engine: engine));
+  runApp(MaterialApp(home: MyGame()));
 }
 
-void setupGame(Engine engine) {
-  engine.rendering.addRenderable(
-    CircleRenderable(
-      radius: 50,
-      fillColor: Colors.blue,
-      position: Offset.zero,
-    ),
-  );
-}''',
+class MyGame extends StatefulWidget {
+  const MyGame({super.key});
+
+  @override
+  State<MyGame> createState() => _MyGameState();
+}
+
+class _MyGameState extends State<MyGame> {
+  late final Engine _engine;
+  late final World _world;
+  final GlobalKey _gameWidgetKey = GlobalKey();
+
+  Size _readViewportSize() {
+    final renderObject = _gameWidgetKey.currentContext?.findRenderObject();
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      return renderObject.size;
+    }
+    return MediaQuery.sizeOf(context);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _engine = Engine();
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _engine.dispose();
+    super.dispose();
+  }
+
+  Future<void> _init() async {
+    await _engine.initialize();
+    _world = _engine.world;
+
+    // Add core ECS systems
+    _world.addSystem(RenderSystem());
+
+    // Create a player entity with ECS components
+    _world.createEntityWithComponents([
+      TransformComponent(
+        position: Offset(
+          _readViewportSize().width / 2,
+          _readViewportSize().height / 2,
+        ),
+      ),
+      VelocityComponent(velocity: const Offset(100, 0)),
+      RenderableComponent(
+        renderable: CircleRenderable(radius: 30, fillColor: Colors.blue),
+      ),
+    ], name: 'Player');
+
+    _engine.start();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: GameWidget(key: _gameWidgetKey, engine: _engine),
+    );
+  }
+}
+''',
       docsContent:
           '''The Core Engine is the heart of Just Game Engine. It provides a fixed-timestep game loop running at 60 updates per second, ensuring consistent and deterministic gameplay regardless of frame rate.
 
@@ -96,10 +140,12 @@ void setupGame(Engine engine) {
           'High-performance 2D canvas rendering with camera controls, renderable objects, layer management, and debug visualization.',
       features: [
         '2D Canvas-Based Rendering with Flutter\'s Canvas API',
-        'Renderable Objects: Circles, rectangles, lines, text, and custom',
+        'Renderable Objects: Circles, rectangles, lines, text, rays, and custom',
+        'Ray Renderable: Glowing beam/laser visuals with configurable fade lifetime',
         'Camera System: Pan, zoom, and rotation with smooth transforms',
         'Layer Management: Z-order sorting for proper depth rendering',
         'Debug Visualization: Bounding boxes, coordinate grids, and performance metrics',
+        'ECS Integration: GameWidget renders ECS entities via RenderSystem',
       ],
       apiClasses: [
         ApiClass(
@@ -129,6 +175,10 @@ void setupGame(Engine engine) {
         ApiClass(
           name: 'TextRenderable',
           description: 'Renders text on the canvas',
+        ),
+        ApiClass(
+          name: 'RayRenderable',
+          description: 'Glowing beam/laser visual with fade lifetime',
         ),
         ApiClass(
           name: 'CustomRenderable',
@@ -178,7 +228,71 @@ The `Camera` class provides pan, zoom, and rotation transforms. Use `screenToWor
 Renderables are sorted by their z-order value for proper depth rendering. Higher z-order values render on top.''',
     ),
 
-    // ── 3. Sprites ──────────────────────────────────────────
+    // ── 3. Parallax ─────────────────────────────────────────
+    EngineSubsystem(
+      id: 'parallax',
+      name: 'Parallax Background System',
+      icon: Icons.layers,
+      category: SubsystemCategory.visual,
+      shortDescription:
+          'Multi-layer parallax backgrounds with camera-relative depth scrolling and optional auto-scroll per layer.',
+      features: [
+        'Layered Parallax: Ordered back-to-front depth layers',
+        'Scroll Factors: Independent scrollFactorX / scrollFactorY per layer',
+        'Auto-Scroll: velocityX / velocityY for ambient background motion',
+        'Layer Styling: scale, repeat, offset, opacity, and tint controls',
+        'Runtime Control: addBackground(), removeBackground(), and clear()',
+        'Render Integration: Drawn in screen space before world rendering',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'ParallaxLayer',
+          description: 'Single parallax layer with depth and visual controls',
+        ),
+        ApiClass(
+          name: 'ParallaxBackground',
+          description: 'Ordered container managing multiple parallax layers',
+        ),
+        ApiClass(
+          name: 'ParallaxSystem',
+          description: 'Engine subsystem that updates and renders backgrounds',
+        ),
+      ],
+      codeTitle: 'Parallax Setup',
+      codeExample: '''final background = ParallaxBackground(
+  layers: [
+    ParallaxLayer.uniform(
+      image: backTrees,
+      scrollFactor: 0.15,
+      repeat: true,
+    ),
+    ParallaxLayer.uniform(
+      image: frontTrees,
+      scrollFactor: 0.7,
+      velocityX: -4,
+      repeat: true,
+    ),
+  ],
+);
+
+engine.parallax.addBackground(background);
+
+// In your update loop
+engine.parallax.update(deltaTime, engine.rendering.camera.position);''',
+      docsContent:
+          '''The Parallax Background System adds cinematic depth to 2D scenes by compositing multiple image layers that move at different relative speeds.
+
+**ParallaxLayer:**
+Each layer supports camera-relative scroll factors (`scrollFactorX`, `scrollFactorY`) and optional independent motion (`velocityX`, `velocityY`). You can also control `scale`, `repeat`, `offset`, `opacity`, and `tint`.
+
+**ParallaxBackground:**
+Groups multiple layers in draw order (index 0 = furthest back). Use `addLayer()`, `insertLayer()`, and `removeLayer()` to change the stack at runtime.
+
+**ParallaxSystem:**
+Managed through `Engine.parallax`. Call `update(deltaTime, cameraPosition)` each frame; rendering is integrated with the engine background pass before camera-transformed world content.''',
+    ),
+
+    // ── 4. Sprites ──────────────────────────────────────────
     EngineSubsystem(
       id: 'sprites',
       name: 'Sprite System',
@@ -236,7 +350,7 @@ The `Sprite` class renders a single image with support for position, rotation, s
 `NineSliceSprite` is ideal for UI elements like panels and buttons. It divides the image into 9 regions and scales only the center, preserving crisp corners and edges at any size.''',
     ),
 
-    // ── 4. Animation ────────────────────────────────────────
+    // ── 5. Animation ────────────────────────────────────────
     EngineSubsystem(
       id: 'animation',
       name: 'Animation System',
@@ -331,7 +445,7 @@ The `Easings` class provides 15+ curves: `linear`, `easeIn/Out/InOut` variants f
 `AnimationSequence` chains animations to play one after another. `AnimationGroup` runs multiple animations simultaneously. Both support looping.''',
     ),
 
-    // ── 5. Particles ────────────────────────────────────────
+    // ── 6. Particles ────────────────────────────────────────
     EngineSubsystem(
       id: 'particles',
       name: 'Particle Effects',
@@ -404,7 +518,7 @@ The core class that spawns and manages particles. Configure emission rate, parti
 Create a `ParticleEmitter` directly and configure every property: emission rate, velocity range, gravity, color/size gradients, shape, lifetime, and more.''',
     ),
 
-    // ── 6. Physics ──────────────────────────────────────────
+    // ── 7. Physics ──────────────────────────────────────────
     EngineSubsystem(
       id: 'physics',
       name: 'Physics Engine',
@@ -468,7 +582,7 @@ Impulse-based resolution handles elastic collisions with proper restitution and 
 Call `physics.renderDebug(canvas, size)` to visualize all physics bodies, velocity vectors, and collision shapes.''',
     ),
 
-    // ── 7. Scene Graph ──────────────────────────────────────
+    // ── 8. Scene Graph ──────────────────────────────────────
     EngineSubsystem(
       id: 'scene-graph',
       name: 'Scene Graph',
@@ -527,22 +641,23 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
 `SceneEditor` manages multiple scenes. Create scenes with `createScene()`, switch between them, and query nodes by name with `findNode()`.''',
     ),
 
-    // ── 8. ECS ──────────────────────────────────────────────
+    // ── 9. ECS ──────────────────────────────────────────────
     EngineSubsystem(
       id: 'ecs',
       name: 'Entity-Component System',
       icon: Icons.widgets,
       category: SubsystemCategory.gameplay,
       shortDescription:
-          'Data-oriented ECS architecture with 13 built-in components, 9 systems, entity queries, and hierarchy support.',
+          'Data-oriented ECS architecture with 15+ built-in components, 9 systems, reactive signals, entity queries, and hierarchy support.',
       features: [
         'Data-Oriented Architecture: Composition over inheritance',
         'Entity Management: Create and destroy entities with unique IDs',
-        'Component System: 13 built-in components (Transform, Velocity, Physics, Health, etc.)',
-        'System Processing: 9 built-in systems for movement, rendering, physics, and more',
+        'Component System: 15+ built-in components (Transform, Velocity, Physics, Health, RaycastCollider, JoystickInput, etc.)',
+        'System Processing: 9 built-in systems for movement, rendering, physics, ray casting, and more',
         'Query System: Find entities by component types',
         'World Management: Centralized entity and system coordination',
         'Hierarchy Support: Parent-child entity relationships',
+        'Reactive ECS: Signal-driven wrappers via just_signals for surgical UI updates',
       ],
       apiClasses: [
         ApiClass(name: 'World', description: 'Entity and system manager'),
@@ -575,8 +690,32 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
           description: 'Physics body properties',
         ),
         ApiClass(
+          name: 'RaycastColliderComponent',
+          description: 'Marks entity as hittable by raycasts',
+        ),
+        ApiClass(
           name: 'HealthComponent',
           description: 'Health, damage, and healing',
+        ),
+        ApiClass(
+          name: 'JoystickInputComponent',
+          description: 'Virtual joystick state for ECS-driven mobile control',
+        ),
+        ApiClass(
+          name: 'ComponentSignal',
+          description: 'Signal wrapper for component properties',
+        ),
+        ApiClass(
+          name: 'EntitySignal',
+          description: 'Observe entity-level component changes',
+        ),
+        ApiClass(
+          name: 'WorldSignal',
+          description: 'Track world-level entity counts',
+        ),
+        ApiClass(
+          name: 'ReactiveSystem',
+          description: 'Dirty-only entity processing system',
         ),
         ApiClass(
           name: 'MovementSystem',
@@ -627,29 +766,34 @@ final movers = world.query([TransformComponent, VelocityComponent]);''',
 **Data-Oriented Design:**
 Instead of complex inheritance hierarchies, entities are composed of small data components. Systems process entities that have specific component combinations. This makes it easy to add new behaviors without modifying existing code.
 
-**Built-in Components (13):**
-`TransformComponent`, `VelocityComponent`, `RenderableComponent`, `PhysicsBodyComponent`, `HealthComponent`, `LifetimeComponent`, `TagComponent`, `ParentComponent`, `ChildrenComponent`, `InputComponent`, `AnimationStateComponent`, `SpriteComponent`, and more.
+**Built-in Components (15+):**
+`TransformComponent`, `VelocityComponent`, `RenderableComponent`, `PhysicsBodyComponent`, `RaycastColliderComponent`, `HealthComponent`, `LifetimeComponent`, `TagComponent`, `ParentComponent`, `ChildrenComponent`, `InputComponent`, `JoystickInputComponent`, `AnimationStateComponent`, `SpriteComponent`, and more.
 
 **Built-in Systems (9):**
-`MovementSystem`, `RenderSystem`, `PhysicsSystemECS`, `LifetimeSystem`, `HierarchySystem`, `HealthSystem`, `AnimationSystemECS`, `BoundarySystem`, and more.
+`MovementSystem`, `RenderSystem`, `PhysicsSystemECS`, `RaycastSystem`, `LifetimeSystem`, `HierarchySystem`, `HealthSystem`, `AnimationSystemECS`, `BoundarySystem`, and more.
 
 **Queries:**
-Use `world.query([ComponentA, ComponentB])` to efficiently find all entities with specific component combinations. Use `world.findEntityByName('Player')` for named lookups.''',
+Use `world.query([ComponentA, ComponentB])` to efficiently find all entities with specific component combinations. Use `world.findEntityByName('Player')` for named lookups.
+
+**Reactive ECS:**
+The `src/reactive/` layer wraps ECS types with `just_signals` primitives so Flutter widgets can rebuild surgically when game state changes — no polling, no full-tree rebuilds. Use `ComponentSignal`, `EntitySignal`, `WorldSignal`, `ReactiveSystem`, and `ReactiveComponent`.''',
     ),
 
-    // ── 9. Input ────────────────────────────────────────────
+    // ── 10. Input ───────────────────────────────────────────
     EngineSubsystem(
       id: 'input',
       name: 'Input Management',
       icon: Icons.gamepad,
       category: SubsystemCategory.gameplay,
       shortDescription:
-          'Unified polling-based input system for keyboard, mouse, touch, and gamepad with dead zone support.',
+          'Unified polling-based input system for keyboard, mouse, touch, gamepad, and virtual joystick controls.',
       features: [
         'Keyboard Input: Key press, hold, and release with axis support',
         'Mouse Input: Position tracking, button states, scroll wheel, delta movement',
         'Touch Input: Multi-touch with pressure and size tracking',
         'Controller/Gamepad: Analog sticks, triggers, buttons, D-pad',
+        'Virtual Joystick: Fixed and floating touch joystick variants',
+        'Joystick Axis Lock: both, horizontal, or vertical constraints',
         'Event System: Callbacks for custom input handling',
         'Dead Zone: Configurable dead zones for analog inputs',
         'Integrated: Auto event capture through GameWidget',
@@ -668,6 +812,14 @@ Use `world.query([ComponentA, ComponentB])` to efficiently find all entities wit
         ApiClass(
           name: 'ControllerInput',
           description: 'Gamepad sticks, triggers, buttons',
+        ),
+        ApiClass(
+          name: 'VirtualJoystick',
+          description: 'Flutter widget for touch-based directional control',
+        ),
+        ApiClass(
+          name: 'JoystickInputComponent',
+          description: 'ECS component that stores joystick direction state',
         ),
         ApiClass(name: 'MouseButton', description: 'Mouse button constants'),
         ApiClass(
@@ -705,7 +857,16 @@ for (final touch in input.touch.touches) {
 
 // Gamepad
 final leftStick = input.controller.leftStick;
-player.move(leftStick * speed);''',
+player.move(leftStick * speed);
+
+// Mobile virtual joystick
+VirtualJoystick(
+  variant: JoystickVariant.floating,
+  axis: JoystickAxis.both,
+  onDirectionChanged: (direction) {
+    joystickComponent.direction = direction;
+  },
+);''',
       docsContent:
           '''The Input Management system provides unified, polling-based input across all device types.
 
@@ -721,11 +882,17 @@ Unlike event-driven systems, Just Game Engine uses a polling model — check inp
 **Touch:**
 `input.touch.touches` returns all active touch points with position, pressure, and size. Supports multi-touch natively.
 
+**Virtual Joystick (v1.4.0):**
+Use `VirtualJoystick` for mobile-friendly movement controls. Choose `JoystickVariant.fixed` (always visible) or `JoystickVariant.floating` (spawns at touch-down), and constrain motion with `JoystickAxis.both`, `horizontal`, or `vertical`.
+
+**Joystick ECS Integration:**
+`JoystickInputComponent` stores current joystick direction and helper state so movement systems can consume mobile input exactly like keyboard/gamepad input.
+
 **Gamepad:**
 `input.controller.leftStick` and `rightStick` return `Offset` values. `isButtonPressed(GamepadButton)` handles button input. Configurable dead zones prevent stick drift.''',
     ),
 
-    // ── 10. Assets ──────────────────────────────────────────
+    // ── 11. Assets ──────────────────────────────────────────
     EngineSubsystem(
       id: 'assets',
       name: 'Asset Management',
@@ -813,20 +980,20 @@ All loaded assets are automatically cached by the `AssetManager`. Use `getCacheS
 Group related assets into an `AssetBundle` for batch loading and unloading — ideal for level-based games where you load all assets for a level at once and free them when transitioning.''',
     ),
 
-    // ── 11. Audio ───────────────────────────────────────────
+    // ── 12. Audio ───────────────────────────────────────────
     EngineSubsystem(
       id: 'audio',
       name: 'Audio Engine',
       icon: Icons.music_note,
       category: SubsystemCategory.utilities,
       shortDescription:
-          'Multi-channel audio with master/music/SFX/voice/ambient channels, sound pooling, and fade effects.',
+          'Multi-channel audio with master/music/SFX/voice/ambient channels, unlimited concurrent SFX, and fade effects.',
       features: [
         'Multi-Channel: Master, Music, SFX, Voice, and Ambient channels',
-        'Sound Effects: Player pooling (10 concurrent SFX)',
+        'Sound Effects: Unlimited concurrent SFX via SoLoud native voice management',
         'Music: Background music with fade in/out and looping',
         'Audio Mixer: Per-channel volume control, mute/unmute',
-        'Integration: Built on audioplayers for cross-platform support',
+        'Integration: Built on flutter_soloud (SoLoud C++ engine) for low-latency audio',
       ],
       apiClasses: [
         ApiClass(
@@ -883,19 +1050,249 @@ audioEngine.toggleMute();
 // Stop music with fade out
 audioEngine.stopMusic(fadeOutDuration: 1.5);''',
       docsContent:
-          '''The Audio Engine provides a complete multi-channel audio system built on the `audioplayers` package.
+          '''The Audio Engine provides a complete multi-channel audio system built on `flutter_soloud` (SoLoud C++ engine) for low-latency, game-grade audio.
 
 **Channels:**
 Audio is organized into 5 independent channels: Master, Music, SFX, Voice, and Ambient. Each channel has its own volume control and mute state. The master channel controls the overall volume.
 
 **Sound Effects:**
-The `SoundEffectManager` uses player pooling (up to 10 concurrent SFX) with automatic cleanup. Fire-and-forget: just call `playSfx()` and it handles the rest.
+The `SoundEffectManager` provides unlimited concurrent SFX via SoLoud's native voice management with automatic cleanup. Fire-and-forget: just call `playSfx()` and it handles the rest.
 
 **Background Music:**
 `MusicManager` handles music playback with fade-in/out, seamless looping, pause/resume, and crossfade support. Only one music track plays at a time.
 
 **Audio Mixer:**
 `AudioMixer` provides per-channel volume control via `setChannelVolume()`, `muteChannel()`, and `toggleMute()`. Volumes multiply: effective SFX volume = masterVolume × sfxVolume.''',
+    ),
+
+    // ── 13. Ray Casting & Tracing ───────────────────────────
+    EngineSubsystem(
+      id: 'raycasting',
+      name: 'Ray Casting & Tracing',
+      icon: Icons.linear_scale_rounded,
+      category: SubsystemCategory.gameplay,
+      shortDescription:
+          '2D raycasting with ECS integration, line-of-sight checks, and multi-bounce reflective ray tracing.',
+      features: [
+        'Ray Descriptor: 2D ray with origin, direction, and max-distance',
+        'ECS Integration: RaycastColliderComponent marks entities as hittable',
+        'Query System: castRay (closest hit), castRayAll (all hits sorted)',
+        'Line of Sight: hasLineOfSight() for visibility checks',
+        'Multi-Bounce Tracing: RayTracer for reflective surfaces',
+        'Ray Visuals: RayRenderable with glowing beam effects',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'Ray',
+          description: '2D ray descriptor (origin, direction, maxDistance)',
+        ),
+        ApiClass(
+          name: 'RaycastColliderComponent',
+          description: 'Marks entity as hittable with radius, tag, isBlocker',
+        ),
+        ApiClass(
+          name: 'RaycastHit',
+          description: 'Intersection result (entity, point, distance, normal)',
+        ),
+        ApiClass(
+          name: 'RaycastSystem',
+          description: 'Query system (castRay, castRayAll, hasLineOfSight)',
+        ),
+        ApiClass(
+          name: 'RayTracer',
+          description: 'Multi-bounce reflective ray tracing',
+        ),
+        ApiClass(
+          name: 'RayTrace',
+          description: 'Complete trace result with path segments',
+        ),
+        ApiClass(
+          name: 'RayRenderable',
+          description: 'Glowing beam visual with fade lifetime',
+        ),
+      ],
+      codeTitle: 'Ray Casting',
+      codeExample: '''final world = engine.world;
+
+// Add raycast system
+world.addSystem(RaycastSystem());
+
+// Create hittable entity
+final target = world.createEntity(name: 'Target');
+target.addComponent(TransformComponent(
+  position: const Offset(200, 0),
+));
+target.addComponent(RaycastColliderComponent(
+  radius: 30,
+  tag: 'enemy',
+  isBlocker: true,
+  isReflective: false,
+));
+
+// Cast a ray
+final ray = Ray(
+  origin: Offset.zero,
+  direction: const Offset(1, 0),
+  maxDistance: 500,
+);
+
+final raycastSystem = world.getSystem<RaycastSystem>();
+
+// Get closest hit
+final hit = raycastSystem?.castRay(ray);
+if (hit != null) {
+  print('Hit \${hit.entity.name} at \${hit.point}');
+}
+
+// Get all hits sorted by distance
+final hits = raycastSystem?.castRayAll(ray) ?? [];
+
+// Line of sight check
+final canSee = raycastSystem?.hasLineOfSight(
+  Offset.zero,
+  const Offset(200, 0),
+) ?? false;''',
+      docsContent:
+          '''The Ray Casting & Tracing system provides 2D raycasting with full ECS integration for shooting mechanics, line-of-sight checks, and visibility calculations.
+
+**Ray:**
+A 2D ray descriptor with `origin`, normalized `direction`, and `maxDistance`. Use `Ray.fromPoints()` for convenience when you have start and end points.
+
+**RaycastColliderComponent:**
+An ECS component that marks an entity as hittable by raycasts. Configure `radius` (hit area), `tag` (for filtering), `isBlocker` (stops rays), `isReflective`, and `reflectivity`.
+
+**RaycastSystem:**
+A query-only ECS system with three main methods:
+• `castRay(ray)` — returns the closest hit
+• `castRayAll(ray)` — returns all hits sorted nearest-first
+• `hasLineOfSight(from, to)` — quick visibility check
+
+**RayTracer:**
+For multi-bounce ray tracing against reflective surfaces. Configure `maxBounces` and `minReflectivity`. Returns a `RayTrace` containing every path segment for laser/light reflection effects.
+
+**RayRenderable:**
+Visual representation of a ray with two-layer glow effect and configurable fade lifetime — perfect for lasers, bullet trails, and beam weapons.''',
+    ),
+
+    // ── 14. Tiled Map Support ───────────────────────────────
+    EngineSubsystem(
+      id: 'tiledmap',
+      name: 'Tiled Map Support',
+      icon: Icons.grid_on,
+      category: SubsystemCategory.utilities,
+      shortDescription:
+          'Native Tiled editor support with TMX/TSX parsing, GPU-batched rendering, texture atlases, and spatial queries.',
+      features: [
+        'TMX/TSX Parsing: Full Tiled map editor file support',
+        'Map Types: Orthogonal, isometric, staggered, and hexagonal',
+        'Layer Support: Tile, Object, Image, and Group layers with properties',
+        'GPU-Batched Rendering: Canvas.drawRawAtlas for maximum throughput',
+        'Texture Atlas: Automatic packed atlas from tilesets',
+        'Animated Tiles: Per-tile animation sequences',
+        'Spatial Hash Grid: O(1) AABB, point, and radius queries',
+        'Compression: CSV, Base64, XML; GZIP, Zlib, Zstandard',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'TileMapParser',
+          description: 'Async parser for .tmx/.tsx files',
+        ),
+        ApiClass(
+          name: 'TileMap',
+          description: 'Parsed map data with layers, tilesets, properties',
+        ),
+        ApiClass(
+          name: 'TileLayer',
+          description: 'Tile layer with tile IDs and properties',
+        ),
+        ApiClass(
+          name: 'ObjectLayer',
+          description: 'Object layer with MapObject instances',
+        ),
+        ApiClass(name: 'ImageLayer', description: 'Background image layer'),
+        ApiClass(name: 'GroupLayer', description: 'Nested layer container'),
+        ApiClass(
+          name: 'TileMapRenderer',
+          description: 'GPU-batched renderer using drawRawAtlas',
+        ),
+        ApiClass(
+          name: 'TextureAtlas',
+          description: 'Packed texture atlas from tilesets',
+        ),
+        ApiClass(
+          name: 'SpatialHashGrid',
+          description: 'O(1) spatial queries for map objects',
+        ),
+        ApiClass(
+          name: 'MapObject',
+          description: 'Tiled object with geometry and properties',
+        ),
+      ],
+      codeTitle: 'Loading Tiled Maps',
+      codeExample: '''import 'package:just_tiled/just_tiled.dart';
+
+// Parse a .tmx map from assets
+final tileMap = await TileMapParser.parseAsset(
+  'assets/maps/level1.tmx',
+);
+
+// Build a packed texture atlas
+final atlas = await TextureAtlas.fromTileMap(tileMap);
+
+// Create renderers for tile layers
+final renderers = tileMap.layers
+    .whereType<TileLayer>()
+    .map((layer) => TileMapRenderer(
+          tileMap: tileMap,
+          layer: layer,
+          atlas: atlas,
+        ))
+    .toList();
+
+// Render in a CustomRenderable
+engine.rendering.addRenderable(
+  CustomRenderable(
+    onRender: (canvas, size) {
+      for (final renderer in renderers) {
+        renderer.render(canvas);
+      }
+    },
+  ),
+);
+
+// Use SpatialHashGrid for fast object queries
+final grid = SpatialHashGrid<MapObject>(cellSize: 128);
+for (final layer in tileMap.layers.whereType<ObjectLayer>()) {
+  for (final obj in layer.objects) {
+    grid.insert(obj, obj.bounds);
+  }
+}
+
+// Query objects near player
+final nearby = grid.queryAABB(playerBounds);''',
+      docsContent:
+          '''The Tiled Map Support system (via `just_tiled` package) provides native integration with the Tiled map editor for level design.
+
+**TileMapParser:**
+Async parser for `.tmx` and `.tsx` files supporting CSV, Base64, and XML tile data. Handles GZIP, Zlib, and Zstandard compression (via `just_zstd`).
+
+**Map Orientations:**
+Full support for orthogonal, isometric, staggered, and hexagonal map orientations with proper coordinate transforms.
+
+**Layer Hierarchy:**
+Complete layer support including `TileLayer`, `ObjectLayer`, `ImageLayer`, and `GroupLayer` with nested hierarchies and custom properties.
+
+**GPU-Batched Rendering:**
+`TileMapRenderer` uses `Canvas.drawRawAtlas` to submit all tiles in a single draw call for maximum throughput — essential for large maps.
+
+**TextureAtlas:**
+`TextureAtlas.fromTileMap()` builds a packed atlas from all tilesets in the map, minimizing texture swaps during rendering.
+
+**SpatialHashGrid:**
+Generic spatial hash with O(1) complexity for AABB, point, and radius queries against map objects — perfect for collision detection and trigger zones.
+
+**Animated Tiles:**
+Per-tile animation sequences are automatically driven by the engine game loop, supporting Tiled's native tile animation format.''',
     ),
   ];
 }

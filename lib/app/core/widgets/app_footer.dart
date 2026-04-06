@@ -66,7 +66,7 @@ class _DesktopFooter extends StatelessWidget {
               url: 'https://github.com/just-unknown-dev/just-game-engine',
             ),
             const SizedBox(height: 4),
-            _FooterLink(label: 'Discord', url: 'https://discord.gg/AaAZayn3'),
+            _FooterLink(label: 'Discord', url: 'https://discord.gg/VXFxVj4Y'),
             const SizedBox(height: 4),
             _FooterLink(
               label: 'pub.dev',
@@ -111,7 +111,7 @@ class _MobileFooter extends StatelessWidget {
               url: 'https://github.com/just-unknown-dev/just-game-engine',
             ),
             const SizedBox(width: 16),
-            _FooterLink(label: 'Discord', url: 'https://discord.gg/AaAZayn3'),
+            _FooterLink(label: 'Discord', url: 'https://discord.gg/VXFxVj4Y'),
             const SizedBox(width: 16),
             _FooterLink(
               label: 'pub.dev',
