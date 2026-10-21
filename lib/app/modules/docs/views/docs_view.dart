@@ -256,13 +256,19 @@ class _DocsSidebar extends StatelessWidget {
     _SidebarGroup('Getting Started', [
       _SidebarItem('getting-started', 'Quick Start'),
     ]),
-    _SidebarGroup('Core Systems', [_SidebarItem('core', 'Core Engine')]),
+    _SidebarGroup('Core Systems', [
+      _SidebarItem('core', 'Core Engine'),
+      _SidebarItem('math', 'Math Module'),
+      _SidebarItem('memory', 'Memory Management'),
+    ]),
     _SidebarGroup('Visual', [
       _SidebarItem('rendering', 'Rendering Engine'),
       _SidebarItem('parallax', 'Parallax Background System'),
       _SidebarItem('sprites', 'Sprite System'),
+      _SidebarItem('sprite-atlas', 'Sprite Atlas'),
       _SidebarItem('animation', 'Animation System'),
       _SidebarItem('particles', 'Particle Effects'),
+      _SidebarItem('post-processing', 'Post-Processing'),
     ]),
     _SidebarGroup('Gameplay', [
       _SidebarItem('physics', 'Physics Engine'),
@@ -270,11 +276,14 @@ class _DocsSidebar extends StatelessWidget {
       _SidebarItem('scene-graph', 'Scene Graph'),
       _SidebarItem('ecs', 'Entity-Component System'),
       _SidebarItem('input', 'Input Management'),
+      _SidebarItem('deterministic-effects', 'Deterministic Effects'),
+      _SidebarItem('narrative', 'Narrative & Dialogue'),
     ]),
     _SidebarGroup('Utilities', [
       _SidebarItem('assets', 'Asset Management'),
       _SidebarItem('audio', 'Audio Engine'),
       _SidebarItem('tiledmap', 'Tiled Map Support'),
+      _SidebarItem('localization', 'Localization'),
     ]),
   ];
 

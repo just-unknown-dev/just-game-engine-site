@@ -62,6 +62,36 @@ abstract final class HomeData {
           'GPU-batched TMX rendering via just_tiled with spatial queries.',
       icon: Icons.grid_on,
     ),
+    ComparisonPoint(
+      title: 'Post-Processing Shaders',
+      description:
+          'Full-screen FragmentShader passes and per-entity shader layers via ECS.',
+      icon: Icons.filter,
+    ),
+    ComparisonPoint(
+      title: 'Sprite Atlas System',
+      description:
+          'Auto-detecting TexturePacker/Aseprite atlas parser with named animation clips.',
+      icon: Icons.view_comfy,
+    ),
+    ComparisonPoint(
+      title: 'Deterministic Effects',
+      description:
+          'Tick-based effects with rollback support, serialization, and binary wire format.',
+      icon: Icons.replay,
+    ),
+    ComparisonPoint(
+      title: 'Built-in Localization',
+      description:
+          'ICU-lite i18n with namespaces, fallback chains, and signal-driven Flutter widgets.',
+      icon: Icons.language,
+    ),
+    ComparisonPoint(
+      title: 'Narrative & Dialogue',
+      description:
+          'Full Yarn Spinner 2.x runtime with ECS integration and ready-made UI widgets.',
+      icon: Icons.chat_bubble_outline,
+    ),
   ];
 
   /// Getting Started docs content.
@@ -69,15 +99,15 @@ abstract final class HomeData {
       '''Just Game Engine is a lightweight, data-oriented 2D game engine for Flutter. It combines Entity-Component-System (ECS) architecture with a fixed-timestep game loop (60 UPS) to deliver deterministic, high-performance games.
 
 **Prerequisites:**
-• Flutter SDK 3.24.0 or higher
-• Dart 3.24.0 or higher
+• Flutter SDK 3.11.0 or higher
+• Dart 3.0.0 or higher
 
 **Installation:**
 Add to your pubspec.yaml:
 
 ```
 dependencies:
-  just_game_engine: ^1.4.0
+  just_game_engine: ^1.5.0
 ```
 
 Then run:

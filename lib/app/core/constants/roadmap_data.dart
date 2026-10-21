@@ -124,13 +124,12 @@ abstract final class RoadmapData {
       tags: ['Audio', 'Utilities'],
     ),
 
-    // Q2 2026
     RoadmapItem(
       title: 'Physics Engine v2.0',
       description:
           'Enhanced SAT collision detection with improved performance and new collision shapes.',
-      status: 'In Progress',
-      quarter: 'Q2 2026',
+      status: 'Completed',
+      quarter: 'Q1 2026',
       icon: Icons.science,
       tags: ['Physics', 'Performance'],
     ),
@@ -139,7 +138,7 @@ abstract final class RoadmapData {
       description:
           '2D raycasting system for line-of-sight, shooting mechanics, and visibility checks.',
       status: 'Completed',
-      quarter: 'Q2 2026',
+      quarter: 'Q1 2026',
       icon: Icons.linear_scale_rounded,
       tags: ['Raycasting', 'Gameplay'],
     ),
@@ -148,7 +147,7 @@ abstract final class RoadmapData {
       description:
           'Native support for Tiled map formats via just_tiled with GPU-batched rendering.',
       status: 'Completed',
-      quarter: 'Q2 2026',
+      quarter: 'Q1 2026',
       icon: Icons.grid_on,
       tags: ['Tilemaps', 'Tools'],
     ),
@@ -157,10 +156,66 @@ abstract final class RoadmapData {
       description:
           'Signal-driven ECS wrappers via just_signals for surgical UI updates without polling.',
       status: 'Completed',
-      quarter: 'Q2 2026',
+      quarter: 'Q1 2026',
       icon: Icons.bolt,
       tags: ['ECS', 'Reactive'],
     ),
+    RoadmapItem(
+      title: 'Post-Processing v1.0',
+      description:
+          'Full-screen FragmentShader passes, per-entity shader layers, and ECS PostProcessSystem.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.filter,
+      tags: ['Rendering', 'Visual'],
+    ),
+    RoadmapItem(
+      title: 'Sprite Atlas v1.0',
+      description:
+          'Auto-detecting TexturePacker/Aseprite atlas parser with named regions and animation clips.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.view_comfy,
+      tags: ['Sprites', 'Performance'],
+    ),
+    RoadmapItem(
+      title: 'Deterministic Effects v1.0',
+      description:
+          'Tick-based effects with rollback support, JSON/binary serialization, and ECS integration.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.replay,
+      tags: ['Effects', 'Multiplayer'],
+    ),
+    RoadmapItem(
+      title: 'Localization v1.0',
+      description:
+          'Engine-wide i18n with namespace support, ICU-lite templating, fallback chains, and signal-driven widgets.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.language,
+      tags: ['i18n', 'Utilities'],
+    ),
+    RoadmapItem(
+      title: 'Narrative & Dialogue v1.0',
+      description:
+          'Full Yarn Spinner 2.x parser and runtime with ECS integration and ready-made Flutter UI widgets.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.chat_bubble_outline,
+      tags: ['Story', 'Gameplay'],
+    ),
+    RoadmapItem(
+      title: 'Math Module & Memory Management v1.0',
+      description:
+          'Mutable Vec2 type for zero-allocation physics, Quadtree spatial indexing, ObjectPool, and multi-tier CacheManager.',
+      status: 'Completed',
+      quarter: 'Q1 2026',
+      icon: Icons.calculate,
+      tags: ['Performance', 'Core'],
+    ),
+
+    // Q2 2026
     RoadmapItem(
       title: 'Documentation Overhaul',
       description:

@@ -299,10 +299,11 @@ Managed through `Engine.parallax`. Call `update(deltaTime, cameraPosition)` each
       icon: Icons.image,
       category: SubsystemCategory.visual,
       shortDescription:
-          'Image rendering with sprite sheets, nine-slice scaling, and horizontal/vertical flipping.',
+          'Image rendering with sprite sheets, nine-slice scaling, sprite batching for draw-call reduction, and horizontal/vertical flipping.',
       features: [
         'Image Rendering: Load and display images with easy asset management',
         'Sprite Sheets: Manage multiple sprites in a single texture',
+        'Sprite Batching: SpriteBatch submits all sprites sharing an atlas in a single Canvas.drawAtlas() call',
         'Nine-Slice Scaling: Scalable UI elements that maintain corner details',
         'Flipping: Horizontal and vertical sprite flipping',
       ],
@@ -314,6 +315,11 @@ Managed through `Engine.parallax`. Call `update(deltaTime, cameraPosition)` each
         ApiClass(
           name: 'SpriteSheet',
           description: 'Texture atlas for efficient multi-sprite rendering',
+        ),
+        ApiClass(
+          name: 'SpriteBatch',
+          description:
+              'Batches sprites sharing an atlas into a single draw call',
         ),
         ApiClass(
           name: 'NineSliceSprite',
@@ -648,22 +654,29 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
       icon: Icons.widgets,
       category: SubsystemCategory.gameplay,
       shortDescription:
-          'Data-oriented ECS architecture with 15+ built-in components, 9 systems, reactive signals, entity queries, and hierarchy support.',
+          'Data-oriented ECS architecture with 26+ built-in components, 17+ systems, reactive signals, command buffer, event bus, entity prefabs, and hierarchy support.',
       features: [
         'Data-Oriented Architecture: Composition over inheritance',
-        'Entity Management: Create and destroy entities with unique IDs',
-        'Component System: 15+ built-in components (Transform, Velocity, Physics, Health, RaycastCollider, JoystickInput, etc.)',
-        'System Processing: 9 built-in systems for movement, rendering, physics, ray casting, and more',
-        'Query System: Find entities by component types',
-        'World Management: Centralized entity and system coordination',
+        'Entity Management: Create and destroy entities with generational IDs',
+        'Component System: 26+ built-in components (Transform, Velocity, Physics, Health, RaycastCollider, Shader, Parallax, Particle, etc.)',
+        'System Processing: 17+ built-in systems with standardized priorities',
+        'Command Buffer: Deferred entity mutations via world.commands — safe inside system updates',
+        'Event Bus: Typed inter-system messaging via world.events (on<T>() / fire())',
+        'Entity Prefabs: Reusable blueprints via EntityPrefab with batch-spawn support',
+        'Query System: Find entities by component types with integer-based cache hashing',
+        'World Management: Centralized entity and system coordination with O(1) removal',
         'Hierarchy Support: Parent-child entity relationships',
         'Reactive ECS: Signal-driven wrappers via just_signals for surgical UI updates',
       ],
       apiClasses: [
-        ApiClass(name: 'World', description: 'Entity and system manager'),
+        ApiClass(
+          name: 'World',
+          description:
+              'Entity and system manager with CommandBuffer and EventBus',
+        ),
         ApiClass(
           name: 'Entity',
-          description: 'Component container with unique ID and name',
+          description: 'Component container with generational ID and name',
         ),
         ApiClass(
           name: 'Component',
@@ -672,6 +685,10 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
         ApiClass(
           name: 'System',
           description: 'Base class for processing systems',
+        ),
+        ApiClass(
+          name: 'EntityPrefab',
+          description: 'Reusable entity blueprint for batch spawning',
         ),
         ApiClass(
           name: 'TransformComponent',
@@ -686,6 +703,22 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
           description: 'Attachable visual renderable',
         ),
         ApiClass(
+          name: 'SpriteComponent',
+          description: 'Sprite rendering component',
+        ),
+        ApiClass(
+          name: 'ShaderComponent',
+          description: 'Per-entity or post-process shader',
+        ),
+        ApiClass(
+          name: 'ParallaxComponent',
+          description: 'Attaches a ParallaxBackground to an entity',
+        ),
+        ApiClass(
+          name: 'ParticleEmitterComponent',
+          description: 'ECS particle emitter attachment',
+        ),
+        ApiClass(
           name: 'PhysicsBodyComponent',
           description: 'Physics body properties',
         ),
@@ -698,8 +731,26 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
           description: 'Health, damage, and healing',
         ),
         ApiClass(
+          name: 'EffectComponent',
+          description:
+              'Stores entity EffectPlayer queue for deterministic effects',
+        ),
+        ApiClass(
           name: 'JoystickInputComponent',
           description: 'Virtual joystick state for ECS-driven mobile control',
+        ),
+        ApiClass(name: 'UIComponent', description: 'Base UI entity component'),
+        ApiClass(
+          name: 'ButtonComponent',
+          description: 'Clickable button entity',
+        ),
+        ApiClass(
+          name: 'LinearProgressComponent',
+          description: 'Linear progress bar entity',
+        ),
+        ApiClass(
+          name: 'CircularProgressComponent',
+          description: 'Circular progress indicator entity',
         ),
         ApiClass(
           name: 'ComponentSignal',
@@ -719,15 +770,33 @@ Use `addChild()` to build parent-child relationships. Moving a parent automatica
         ),
         ApiClass(
           name: 'MovementSystem',
-          description: 'Applies velocity to transform',
+          description: 'Applies velocity to transform (priority 80)',
         ),
         ApiClass(
           name: 'RenderSystem',
-          description: 'Draws renderable components',
+          description: 'Draws renderable components (priority 40)',
         ),
         ApiClass(
-          name: 'PhysicsSystemECS',
-          description: 'ECS-integrated physics processing',
+          name: 'PhysicsSystem',
+          description: 'ECS-integrated physics processing (priority 90)',
+        ),
+        ApiClass(
+          name: 'InputSystem',
+          description:
+              'Maps InputManager state to InputComponent (priority 100)',
+        ),
+        ApiClass(
+          name: 'AnimationSystemECS',
+          description: 'Advances animations in ECS (priority 70)',
+        ),
+        ApiClass(
+          name: 'EffectSystemECS',
+          description: 'Manages per-entity EffectPlayer queues (priority 65)',
+        ),
+        ApiClass(
+          name: 'PostProcessSystem',
+          description:
+              'Bridges ShaderComponent to RenderingEngine (priority 35)',
         ),
       ],
       codeTitle: 'Entity-Component System',
@@ -766,17 +835,26 @@ final movers = world.query([TransformComponent, VelocityComponent]);''',
 **Data-Oriented Design:**
 Instead of complex inheritance hierarchies, entities are composed of small data components. Systems process entities that have specific component combinations. This makes it easy to add new behaviors without modifying existing code.
 
-**Built-in Components (15+):**
-`TransformComponent`, `VelocityComponent`, `RenderableComponent`, `PhysicsBodyComponent`, `RaycastColliderComponent`, `HealthComponent`, `LifetimeComponent`, `TagComponent`, `ParentComponent`, `ChildrenComponent`, `InputComponent`, `JoystickInputComponent`, `AnimationStateComponent`, `SpriteComponent`, and more.
+**Built-in Components (26+):**
+`TransformComponent`, `VelocityComponent`, `RenderableComponent`, `SpriteComponent`, `ShaderComponent`, `ParallaxComponent`, `ParticleEmitterComponent`, `PhysicsBodyComponent`, `PhysicsBodyRefComponent`, `RaycastColliderComponent`, `HealthComponent`, `LifetimeComponent`, `TagComponent`, `ParentComponent`, `ChildrenComponent`, `InputComponent`, `JoystickInputComponent`, `CameraFollowComponent`, `AnimationStateComponent`, `AudioSourceComponent`, `AudioPlayComponent`, `TileMapLayerComponent`, `TiledObjectComponent`, `EffectComponent`, `UIComponent`, `TextComponent`, `ButtonComponent`, `LinearProgressComponent`, `CircularProgressComponent`.
 
-**Built-in Systems (9):**
-`MovementSystem`, `RenderSystem`, `PhysicsSystemECS`, `RaycastSystem`, `LifetimeSystem`, `HierarchySystem`, `HealthSystem`, `AnimationSystemECS`, `BoundarySystem`, and more.
+**Built-in Systems (17+):**
+`InputSystem` (100), `PhysicsSystem` (90), `PhysicsBridgeSystem` (89), `MovementSystem` (80), `AnimationSystemECS` (70), `EffectSystemECS` (65), `HealthSystem` (60), `HierarchySystem` (50), `RenderSystem` (40), `PostProcessSystem` (35), `BoundarySystem` (30), `ParticleSystemECS`, `CameraFollowSystem`, `RaycastSystem`, `LifetimeSystem`, `AudioSystem`, `TileMapRenderSystem`, `TiledCollisionSystem`.
+
+**Command Buffer:**
+`world.commands` accepts deferred entity mutations (create, destroy, addComponent, removeComponent) that are safe to call from within system updates — no concurrent-modification exceptions.
+
+**Event Bus:**
+`world.events` provides typed inter-system messaging. Subscribe with `on<T>()` and dispatch with `fire()`. Great for decoupled physics callbacks, damage events, and more.
+
+**Entity Prefabs:**
+`EntityPrefab` is a reusable entity blueprint. Call `world.instantiate(prefab)` for fast batch-spawning without manually repeating component setup.
 
 **Queries:**
-Use `world.query([ComponentA, ComponentB])` to efficiently find all entities with specific component combinations. Use `world.findEntityByName('Player')` for named lookups.
+Use `world.query([ComponentA, ComponentB])` to efficiently find all entities with specific component combinations. The query cache uses integer-based hashing with selective invalidation.
 
 **Reactive ECS:**
-The `src/reactive/` layer wraps ECS types with `just_signals` primitives so Flutter widgets can rebuild surgically when game state changes — no polling, no full-tree rebuilds. Use `ComponentSignal`, `EntitySignal`, `WorldSignal`, `ReactiveSystem`, and `ReactiveComponent`.''',
+The `src/reactive/` layer wraps ECS types with `just_signals` primitives so Flutter widgets can rebuild surgically when game state changes — no polling, no full-tree rebuilds.''',
     ),
 
     // ── 10. Input ───────────────────────────────────────────
@@ -1191,6 +1269,7 @@ Visual representation of a ray with two-layer glow effect and configurable fade 
         'Animated Tiles: Per-tile animation sequences',
         'Spatial Hash Grid: O(1) AABB, point, and radius queries',
         'Compression: CSV, Base64, XML; GZIP, Zlib, Zstandard',
+        'ECS Integration: TileMapLayerComponent, TiledObjectComponent, TileMapRenderSystem, TiledCollisionSystem',
       ],
       apiClasses: [
         ApiClass(
@@ -1293,6 +1372,595 @@ Generic spatial hash with O(1) complexity for AABB, point, and radius queries ag
 
 **Animated Tiles:**
 Per-tile animation sequences are automatically driven by the engine game loop, supporting Tiled's native tile animation format.''',
+    ),
+
+    // ── 15. Post-Processing ─────────────────────────────────
+    EngineSubsystem(
+      id: 'post-processing',
+      name: 'Post-Processing',
+      icon: Icons.filter,
+      category: SubsystemCategory.visual,
+      shortDescription:
+          'Full-screen FragmentShader passes, per-entity shader layers, and ECS-driven post-process pipeline.',
+      features: [
+        'Full-Screen Passes: PostProcessPass wraps the scene through a custom FragmentShader',
+        'Pass Ordering: Multiple passes chained by passOrder (lower = innermost)',
+        'Per-Entity Shaders: ShaderComponent wraps individual entities via canvas.saveLayer',
+        'ECS Integration: PostProcessSystem bridges ShaderComponent to RenderingEngine (priority 35)',
+        'Time Uniform: elapsedSeconds supplied to setUniforms for animated shader effects',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'PostProcessPass',
+          description:
+              'Full-screen FragmentShader pass with passOrder and setUniforms callback',
+        ),
+        ApiClass(
+          name: 'ShaderComponent',
+          description: 'ECS component for per-entity or post-process shaders',
+        ),
+        ApiClass(
+          name: 'PostProcessSystem',
+          description:
+              'Bridges ShaderComponent entities to RenderingEngine (priority 35)',
+        ),
+      ],
+      codeTitle: 'Post-Processing Shader',
+      codeExample: '''// Add a full-screen pass via ECS
+final shaderEntity = world.createEntity(name: 'VignettePass');
+shaderEntity.addComponent(ShaderComponent(
+  shader: myFragmentShader,
+  isPostProcess: true,
+  passOrder: 10,
+  setUniforms: (shader) {
+    shader.setFloat(0, engine.rendering.elapsedSeconds);
+  },
+));
+
+// The PostProcessSystem (priority 35) picks it up automatically.
+// Per-entity shader (wraps only that entity's draw calls):
+playerEntity.addComponent(ShaderComponent(
+  shader: glowShader,
+  isPostProcess: false,
+));''',
+      docsContent:
+          '''The Post-Processing system adds full-screen or per-entity shader effects without writing any pipeline boilerplate.
+
+**PostProcessPass:**
+A full-screen pass that composites the rendered scene through a custom `FragmentShader`. Multiple passes are ordered by `passOrder` — lower values are innermost (closest to the scene), higher values are outermost.
+
+**Per-Entity Shaders:**
+`ShaderComponent(isPostProcess: false)` wraps only that entity's draw calls inside a `canvas.saveLayer`, allowing effects like glow, outline, or dissolve on individual game objects.
+
+**ECS Integration:**
+`PostProcessSystem` (priority 35) reads `ShaderComponent` entries each frame and calls `RenderingEngine.addPostProcessPass` / `removePostProcessPass` automatically.
+
+**Animated Effects:**
+`RenderingEngine.elapsedSeconds` supplies a time value to the `setUniforms` callback so shaders can animate over time (e.g., scanlines, wave distortion).''',
+    ),
+
+    // ── 16. Sprite Atlas ────────────────────────────────────
+    EngineSubsystem(
+      id: 'sprite-atlas',
+      name: 'Sprite Atlas',
+      icon: Icons.view_comfy,
+      category: SubsystemCategory.visual,
+      shortDescription:
+          'Auto-detecting TexturePacker/Aseprite atlas parser with named regions, animation clips, and draw-call reduction.',
+      features: [
+        'Multi-Format Parsing: Auto-detects TexturePacker JSON Array, JSON Hash, multi-page, and Aseprite',
+        'Named Regions: Look up any frame by name via atlas.createSprite()',
+        'Animation Clips: Define named AtlasAnimationClip objects with variable-duration frames',
+        'Draw-Call Reduction: All sprites from the same atlas share a single GPU texture',
+        'SpriteBatch Integration: Combine with SpriteBatch for maximum throughput',
+        'Quick Start: SpriteAtlas.fromAsset() loads and caches the atlas via AssetManager',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'SpriteAtlas',
+          description:
+              'Named-region lookup, clip registration, and sprite/animation creation',
+        ),
+        ApiClass(
+          name: 'AtlasParser',
+          description:
+              'Auto-detecting parser for TexturePacker JSON Array/Hash, multi-page, and Aseprite formats',
+        ),
+        ApiClass(
+          name: 'AtlasAnimationClip',
+          description:
+              'Named animation clip with a list of AtlasFrame entries (region + duration)',
+        ),
+        ApiClass(
+          name: 'AtlasSpriteAnimation',
+          description:
+              'Frame-by-frame animation driving a Sprite through an AtlasAnimationClip',
+        ),
+      ],
+      codeTitle: 'Sprite Atlas Setup',
+      codeExample: '''// Load and cache atlas
+final atlas = await SpriteAtlas.fromAsset(
+  'assets/heroes.json',
+);
+
+// Create a sprite from a named region
+final heroSprite = atlas.createSprite('hero_idle_0');
+
+// Register an animation clip
+atlas.registerClip(AtlasAnimationClip(
+  name: 'hero_run',
+  frames: [
+    AtlasFrame(regionName: 'hero_run_0', duration: 0.1),
+    AtlasFrame(regionName: 'hero_run_1', duration: 0.1),
+    AtlasFrame(regionName: 'hero_run_2', duration: 0.1),
+    AtlasFrame(regionName: 'hero_run_3', duration: 0.1),
+  ],
+));
+
+// Drive animation
+final animation = AtlasSpriteAnimation(
+  atlas: atlas,
+  clipName: 'hero_run',
+  sprite: heroSprite,
+  loop: true,
+);
+animation.play();''',
+      docsContent:
+          '''The Sprite Atlas system provides efficient named-frame access and animation from packed texture atlases.
+
+**AtlasParser:**
+Automatically detects the format (TexturePacker JSON Array, JSON Hash, multi-page, or Aseprite export) — no manual format selection needed.
+
+**Named Regions:**
+Every frame is accessible by name via `atlas.createSprite('frame_name')`, making it easy to assemble entities from descriptive identifiers rather than integer indices.
+
+**AtlasAnimationClip:**
+Define named animation sequences with per-frame durations. Register clips on the atlas and drive a `Sprite` through them using `AtlasSpriteAnimation`.
+
+**Performance:**
+All sprites from the same atlas share a single GPU texture. Combine with `SpriteBatch` to submit all draw calls in a single `Canvas.drawAtlas()` call for dramatic draw-call reduction.''',
+    ),
+
+    // ── 17. Deterministic Effects ───────────────────────────
+    EngineSubsystem(
+      id: 'deterministic-effects',
+      name: 'Deterministic Effects',
+      icon: Icons.replay,
+      category: SubsystemCategory.gameplay,
+      shortDescription:
+          'Tick-based effects that reproduce identically from integer ticks, with rollback support, JSON/binary serialization, and ECS integration.',
+      features: [
+        'Multiplayer-Ready: 11 tick-based effects reproduce identically from integer ticks',
+        'Effect Types: MoveEffect, ScaleEffect, RotateEffect, FadeEffect, ColorTintEffect',
+        'Composite Effects: SequenceEffect, ParallelEffect, DelayEffect, RepeatEffect',
+        'Gameplay Effects: ShakeEffect, PathEffect',
+        'Pure-Delta Contract: applyTick(ctx, prevElapsed, currElapsed) is additive and stack-safe',
+        'Serialization: EffectSerializer (JSON) and EffectBinaryCodec (little-endian wire format)',
+        'Rollback Support: EffectSnapshot captures mid-flight state for late-join reconnect',
+        'ECS Integration: EffectSystemECS manages per-entity EffectPlayer queues (priority 65)',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'DeterministicEffect',
+          description:
+              'Abstract base; implements applyTick(ctx, prevElapsed, currElapsed)',
+        ),
+        ApiClass(
+          name: 'MoveEffect',
+          description: 'Moves entity along a path deterministically',
+        ),
+        ApiClass(
+          name: 'ScaleEffect',
+          description: 'Scales entity deterministically',
+        ),
+        ApiClass(
+          name: 'RotateEffect',
+          description: 'Rotates entity deterministically',
+        ),
+        ApiClass(name: 'FadeEffect', description: 'Fades entity opacity'),
+        ApiClass(name: 'ColorTintEffect', description: 'Tints entity color'),
+        ApiClass(
+          name: 'SequenceEffect',
+          description: 'Chains effects sequentially',
+        ),
+        ApiClass(
+          name: 'ParallelEffect',
+          description: 'Runs effects simultaneously',
+        ),
+        ApiClass(name: 'ShakeEffect', description: 'Shakes entity position'),
+        ApiClass(
+          name: 'PathEffect',
+          description: 'Moves entity along a custom path',
+        ),
+        ApiClass(
+          name: 'EffectComponent',
+          description: 'ECS component storing an entity EffectPlayer queue',
+        ),
+        ApiClass(
+          name: 'EffectSystemECS',
+          description: 'Advances all in-flight effects each tick (priority 65)',
+        ),
+        ApiClass(
+          name: 'EffectSerializer',
+          description: 'JSON factory registry for effects',
+        ),
+        ApiClass(
+          name: 'EffectBinaryCodec',
+          description: 'Little-endian v1 binary wire format',
+        ),
+        ApiClass(
+          name: 'EffectSnapshot',
+          description: 'Mid-flight state capture for rollback',
+        ),
+      ],
+      codeTitle: 'Deterministic Effects',
+      codeExample: '''// Get the EffectSystem
+final effectSystem = world.getSystem<EffectSystemECS>();
+
+// Schedule a move effect on an entity
+effectSystem?.scheduleEffect(
+  entity: playerEntity,
+  effect: SequenceEffect(effects: [
+    MoveEffect(
+      targetOffset: const Offset(200, 0),
+      duration: 60, // ticks
+    ),
+    ShakeEffect(intensity: 5.0, duration: 30),
+    FadeEffect(targetOpacity: 0.0, duration: 30),
+  ]),
+);
+
+// Serialize to JSON for network send
+final json = EffectSerializer.toJson(effect);
+
+// Serialize to binary wire format
+final bytes = EffectBinaryCodec.encode(effect);
+
+// Capture snapshot for rollback
+final snapshot = EffectSnapshot.capture(effectPlayer);''',
+      docsContent:
+          '''The Deterministic Effects system provides tick-based visual effects that reproduce identically from integer ticks alone, making them ideal for multiplayer games.
+
+**Pure-Delta Contract:**
+`applyTick(ctx, prevElapsed, currElapsed)` is additive — two effects on the same entity stack correctly. Fast-forward via `applyTick(ctx, 0, N)` for late-join reconnect.
+
+**Effect Types (11):**
+`MoveEffect`, `ScaleEffect`, `RotateEffect`, `FadeEffect`, `ColorTintEffect`, `SequenceEffect`, `ParallelEffect`, `DelayEffect`, `RepeatEffect`, `ShakeEffect`, `PathEffect`.
+
+**ECS Integration:**
+`EffectSystemECS` (priority 65) manages per-entity `EffectPlayer` queues. Schedule effects via `effectSystem.scheduleEffect(entity: e, effect: ...)`.
+
+**Serialization:**
+`EffectSerializer` provides a JSON factory registry. `EffectBinaryCodec` encodes effects in a compact little-endian v1 wire format suitable for network transmission.
+
+**Rollback Support:**
+`EffectSnapshot` captures mid-flight effect state for lock-step or rollback networking scenarios.''',
+    ),
+
+    // ── 18. Localization ────────────────────────────────────
+    EngineSubsystem(
+      id: 'localization',
+      name: 'Localization',
+      icon: Icons.language,
+      category: SubsystemCategory.utilities,
+      shortDescription:
+          'Engine-wide i18n with namespace support, ICU-lite templating, fallback chains, and signal-driven Flutter widgets.',
+      features: [
+        'Engine-Wide i18n: LocalizationManager serves string lookups to all subsystems',
+        'Namespaces: Organize strings by domain (ui, game, dialogue)',
+        'Fallback Chain: fr_CA → fr → en → raw key (configurable fallbackLocale)',
+        'ICU-lite Templating: {var} substitutions, plural, and gender select',
+        'Signal-Driven: localeSignal lets widgets rebuild only when locale changes',
+        'Flutter Widgets: LocalizationScope, LocalizationBuilder, LocalizedText, LocaleSelector',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'LocalizationManager',
+          description:
+              'Central i18n service with namespace support, fallback chain, and localeSignal',
+        ),
+        ApiClass(
+          name: 'LocaleStringTable',
+          description: 'Immutable per-locale flat string map',
+        ),
+        ApiClass(
+          name: 'StringInterpolator',
+          description: 'ICU-lite engine: {var}, plural, select',
+        ),
+        ApiClass(
+          name: 'LocalizationScope',
+          description: 'InheritedWidget exposing LocalizationManager',
+        ),
+        ApiClass(
+          name: 'LocalizationBuilder',
+          description: 'Rebuilds on locale change, exposes t() helper',
+        ),
+        ApiClass(
+          name: 'LocalizedText',
+          description: 'Drop-in Text replacement resolving keys',
+        ),
+        ApiClass(
+          name: 'LocaleSelector',
+          description: 'Ready-made locale-switching UI widget',
+        ),
+      ],
+      codeTitle: 'Localization Setup',
+      codeExample: '''// Initialize LocalizationManager
+final l10n = LocalizationManager(fallbackLocale: const Locale('en'));
+
+// Load namespaced JSON files
+await l10n.loadNamespace(
+  locale: const Locale('en'),
+  namespace: 'ui',
+  json: {'welcome': 'Welcome, {name}!', 'score': '{count, plural, =1{1 point} other{{count} points}}'},
+);
+
+// Change locale (signal notifies all widgets)
+l10n.setLocale(const Locale('fr'));
+
+// Lookup with substitution
+final greeting = l10n.translate('welcome', ns: 'ui', vars: {'name': 'Alice'});
+
+// Flutter widget integration
+LocalizationScope(
+  manager: l10n,
+  child: LocalizationBuilder(
+    builder: (context, t) => Text(t('ui.welcome', vars: {'name': 'Player'})),
+  ),
+);''',
+      docsContent:
+          '''The Localization system provides engine-wide internationalization for all subsystems including Narrative/Dialogue.
+
+**Namespaces:**
+Organize strings by domain — load separate JSON files per namespace and locale. For example, `ns: 'ui'` and `ns: 'game'` can be loaded independently, keeping translation files manageable.
+
+**Fallback Chain:**
+For locale `fr_CA`, lookups cascade `fr_CA → fr → en` (configurable `fallbackLocale`) before returning the raw key. This ensures no missing string errors.
+
+**ICU-lite Templating:**
+`StringInterpolator` handles `{var}` substitutions, `{count, plural, =0{…} =1{…} other{…}}` plurals, and `{gender, select, …}` selects.
+
+**Signal-Driven:**
+`LocalizationManager.localeSignal` is a `Signal<Locale>` from `just_signals`. Only widgets subscribed to the signal rebuild on locale change — no expensive full-tree rebuilds.
+
+**Flutter Widgets:**
+`LocalizationScope` exposes the manager as an `InheritedWidget`. `LocalizationBuilder` rebuilds on locale change. `LocalizedText` is a drop-in `Text` replacement. `LocaleSelector` is a ready-to-use locale-switching widget.''',
+    ),
+
+    // ── 19. Narrative / Dialogue ────────────────────────────
+    EngineSubsystem(
+      id: 'narrative',
+      name: 'Narrative & Dialogue',
+      icon: Icons.chat_bubble_outline,
+      category: SubsystemCategory.gameplay,
+      shortDescription:
+          'Full Yarn Spinner 2.x parser and runtime with ECS integration, condition/command registries, and ready-made UI widgets.',
+      features: [
+        'Yarn Spinner 2.x: Full parser and runtime for .yarn script files',
+        'Dialogue Patterns: Linear, branching choices, hub-and-spoke, cutscene',
+        'Condition Registry: Register Dart callbacks for <<if>> conditions',
+        'Command Registry: Register Dart callbacks for <<command>> blocks',
+        'Expression Evaluator: Variables, comparisons, and arithmetic in Yarn if-conditions',
+        'Localization Bridge: DialogueLocalizer delegates to LocalizationManager under namespace "dialogue"',
+        'ECS Integration: DialogueComponent + TriggerComponent + DialogueSystem',
+        'UI Widgets: DialogueBoxWidget and DialogueChoicesWidget for in-game dialogue UI',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'DialogueManager',
+          description:
+              'High-level facade for loading and running .yarn scripts',
+        ),
+        ApiClass(
+          name: 'YarnTokenizer',
+          description: 'Full Yarn Spinner 2.x tokenizer',
+        ),
+        ApiClass(
+          name: 'YarnParser',
+          description: 'Full Yarn Spinner 2.x parser',
+        ),
+        ApiClass(
+          name: 'DialogueRunner',
+          description:
+              'Executes parsed dialogue graph; exposes condition and command registries',
+        ),
+        ApiClass(
+          name: 'DialogueGraph',
+          description: 'Parsed Yarn script data model',
+        ),
+        ApiClass(
+          name: 'DialogueLocalizer',
+          description: 'Bridges dialogue keys to LocalizationManager',
+        ),
+        ApiClass(
+          name: 'DialogueComponent',
+          description: 'ECS component for in-world dialogue ownership',
+        ),
+        ApiClass(
+          name: 'TriggerComponent',
+          description: 'ECS component for trigger conditions',
+        ),
+        ApiClass(
+          name: 'DialogueSystem',
+          description: 'ECS system processing trigger conditions each frame',
+        ),
+        ApiClass(
+          name: 'DialogueBoxWidget',
+          description: 'Ready-made Flutter widget for in-game dialogue display',
+        ),
+        ApiClass(
+          name: 'DialogueChoicesWidget',
+          description: 'Ready-made Flutter widget for dialogue choices',
+        ),
+      ],
+      codeTitle: 'Yarn Dialogue Setup',
+      codeExample: r'''// Load and run a .yarn script
+final manager = DialogueManager();
+await manager.loadScript('assets/story/intro.yarn');
+
+// Register condition callbacks
+manager.runner.registerCondition('hasKey', (args) {
+  return player.inventory.hasItem('key');
+});
+
+// Register command callbacks
+manager.runner.registerCommand('giveItem', (args) {
+  player.inventory.addItem(args[0]);
+});
+
+// Start a dialogue node
+manager.runner.startNode('Intro');
+
+// ECS-driven dialogue triggering
+final npcEntity = world.createEntity(name: 'NPC');
+npcEntity.addComponent(DialogueComponent(nodeName: 'NPC_Greeting'));
+npcEntity.addComponent(TriggerComponent(
+  condition: () => player.isNearNPC,
+));
+
+// Flutter UI
+DialogueBoxWidget(runner: manager.runner);
+DialogueChoicesWidget(runner: manager.runner);''',
+      docsContent:
+          '''The Narrative & Dialogue system provides a full Yarn Spinner 2.x runtime for story-driven games.
+
+**Yarn Spinner 2.x:**
+Full support for `.yarn` script files including linear dialogue, branching choices, hub-and-spoke patterns, and cutscenes. The `YarnTokenizer` and `YarnParser` handle the complete language spec.
+
+**Condition & Command Registries:**
+Register Dart callbacks for `<<if>>` conditions and `<<command>>` blocks at runtime. The expression evaluator handles variables, comparisons, and arithmetic in Yarn if-conditions.
+
+**Localization Bridge:**
+`DialogueLocalizer` delegates all string storage and signal handling to `LocalizationManager` under namespace `'dialogue'`, giving you automatic locale switching for dialogue texts.
+
+**ECS Integration:**
+`DialogueComponent` attaches a script node name to any entity. `TriggerComponent` holds a condition function. `DialogueSystem` evaluates triggers each frame and starts the appropriate dialogue node.
+
+**Flutter UI:**
+`DialogueBoxWidget` and `DialogueChoicesWidget` are fully composable ready-made widgets for in-game dialogue display, designed to be easy to style and extend.''',
+    ),
+
+    // ── 20. Math Module ─────────────────────────────────────
+    EngineSubsystem(
+      id: 'math',
+      name: 'Math Module',
+      icon: Icons.calculate,
+      category: SubsystemCategory.core,
+      shortDescription:
+          'Mutable zero-allocation 2D vector type for hot-path physics and quadtree spatial indexing for viewport culling.',
+      features: [
+        'Vec2: Mutable 2D vector for zero-allocation hot-path physics',
+        'Vec2 Operations: in-place add(), sub(), addScaled(), scale(), setZero()',
+        'Offset Interop: Seamless conversion between Vec2 and Flutter Offset',
+        'Quadtree: Spatial indexing for viewport culling and broad-phase queries',
+        'Quadtree Config: Configurable maxItems and maxDepth for tuning performance',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'Vec2',
+          description:
+              'Mutable 2D vector for zero-allocation hot-path use with Offset interop',
+        ),
+        ApiClass(
+          name: 'Quadtree',
+          description:
+              'Spatial indexing tree with configurable maxItems and maxDepth',
+        ),
+      ],
+      codeTitle: 'Vec2 & Quadtree',
+      codeExample: '''// Vec2 for zero-allocation physics
+final velocity = Vec2(100.0, 0.0);
+final acceleration = Vec2(0.0, 9.8);
+
+// In-place operations (no allocation)
+velocity.addScaled(acceleration, deltaTime);
+velocity.scale(0.98); // damping
+
+// Convert to/from Flutter Offset
+final offset = velocity.toOffset();
+final fromOffset = Vec2.fromOffset(const Offset(100, 200));
+
+// Quadtree for spatial queries
+final tree = Quadtree<Entity>(
+  bounds: Rect.fromLTWH(0, 0, 1920, 1080),
+  maxItems: 4,
+  maxDepth: 6,
+);
+
+tree.insert(entity, entity.bounds);
+
+// Query visible entities
+final visible = tree.queryRect(cameraViewport);''',
+      docsContent:
+          '''The Math Module provides performance-critical primitives for the engine's hot paths.
+
+**Vec2:**
+A mutable 2D vector type designed for zero-allocation use in physics loops. Unlike Flutter's `Offset` (immutable), `Vec2` supports in-place operations: `add()`, `sub()`, `addScaled()`, `scale()`, `setZero()`. The physics engine uses `Vec2` internally for rigid body state. Use `toOffset()` and `Vec2.fromOffset()` for Flutter interop.
+
+**Quadtree:**
+A space-partitioning tree for efficient spatial queries. Configure `maxItems` (max entities per node before subdivision) and `maxDepth` (max tree depth). Use `insert()` to add objects with their bounding rect, and `queryRect()` or `queryPoint()` for fast lookups — ideal for viewport culling and broad-phase collision.''',
+    ),
+
+    // ── 21. Memory Management ───────────────────────────────
+    EngineSubsystem(
+      id: 'memory',
+      name: 'Memory Management',
+      icon: Icons.memory,
+      category: SubsystemCategory.core,
+      shortDescription:
+          'Generic object pool for GC-friendly recycling and multi-tier cache manager with LRU eviction.',
+      features: [
+        'Object Pool: Generic ObjectPool<T> with configurable maxSize',
+        'Pool Lifecycle: acquire() / release() with totalAcquired and peakAvailable stats',
+        'Cache Manager: Multi-tier caching via just_storage (key-value) and just_database (binary)',
+        'LRU Eviction: Automatic eviction with configurable maxBinaryEntries',
+        'SQL-safe Keys: Automatic key validation for safe storage',
+        'Memory Fallback: In-memory fallback when persistent storage is unavailable',
+      ],
+      apiClasses: [
+        ApiClass(
+          name: 'ObjectPool',
+          description:
+              'Generic pool with maxSize, acquire()/release(), and stats',
+        ),
+        ApiClass(
+          name: 'CacheManager',
+          description:
+              'Multi-tier LRU cache via just_storage and just_database',
+        ),
+      ],
+      codeTitle: 'Object Pool & Cache',
+      codeExample: '''// Object Pool for bullets (avoid GC pressure)
+final bulletPool = ObjectPool<Bullet>(
+  factory: () => Bullet(),
+  reset: (b) => b.reset(),
+  maxSize: 200,
+);
+
+// Acquire from pool
+final bullet = bulletPool.acquire();
+bullet.position = playerPosition;
+bullet.velocity = aimDirection * 500;
+
+// Return to pool when done
+bulletPool.release(bullet);
+
+// Pool statistics
+print('Peak available: \${bulletPool.peakAvailable}');
+print('Total acquired: \${bulletPool.totalAcquired}');
+
+// CacheManager for binary data (e.g., physics geometry)
+final cache = CacheManager(maxBinaryEntries: 50);
+await cache.putBinary('level1_physics', geometryBytes);
+final cached = await cache.getBinary('level1_physics');''',
+      docsContent:
+          '''The Memory Management module reduces GC pressure and speeds up expensive resource lookups.
+
+**ObjectPool:**
+A generic pool that recycles objects instead of creating new ones. Configure `maxSize` to cap memory usage. Call `acquire()` to get an object (creates a new one if pool is empty) and `release()` to return it. Statistics via `totalAcquired` and `peakAvailable` help you tune the pool size. Ideal for bullets, particles, and any frequently-spawned objects.
+
+**CacheManager:**
+A multi-tier cache backed by `just_storage` (key-value) and `just_database` (binary BLOB). Uses LRU eviction with configurable `maxBinaryEntries`. SQL-safe key validation prevents storage errors. An in-memory fallback ensures the cache works even when persistent storage is unavailable — useful for caching triangulated physics geometry that is expensive to recompute.''',
     ),
   ];
 }
