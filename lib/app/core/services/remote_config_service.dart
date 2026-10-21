@@ -11,13 +11,9 @@ class RemoteConfigService {
   FirebaseRemoteConfig? _remoteConfig;
   bool _initialized = false;
 
-  // ── Feature flag keys ──────────────────────────────────────────
-  static const String kShowEngineEditorButton = 'show_engine_editor_button';
-
   // ── Default values ─────────────────────────────────────────────
-  static const Map<String, dynamic> _defaults = {
-    kShowEngineEditorButton: false,
-  };
+  // Add a key here when a feature flag is introduced.
+  static const Map<String, dynamic> _defaults = {};
 
   /// Initialize Remote Config with defaults and fetch latest values.
   Future<void> initialize() async {
@@ -46,11 +42,6 @@ class RemoteConfigService {
   }
 
   // ── Getters ────────────────────────────────────────────────────
-
-  /// Whether to show the Engine Editor button in the nav bar.
-  bool get showEngineEditorButton =>
-      _remoteConfig?.getBool(kShowEngineEditorButton) ??
-      (_defaults[kShowEngineEditorButton] as bool);
 
   /// Get a boolean config value by key.
   bool getBool(String key) => _remoteConfig?.getBool(key) ?? false;

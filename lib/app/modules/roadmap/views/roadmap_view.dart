@@ -3,299 +3,267 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/constants/engine_data.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/constants/roadmap_data.dart';
+import '../../../core/constants/site.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_type.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../core/widgets/section_header.dart';
+import '../../../core/widgets/cards.dart';
+import '../../../core/widgets/layout.dart';
 import '../cubit/roadmap_cubit.dart';
 import '../cubit/roadmap_state.dart';
 
 @RoutePage()
-class RoadmapView extends StatelessWidget {
+class RoadmapView extends StatefulWidget {
   const RoadmapView({super.key});
 
   @override
+  State<RoadmapView> createState() => _RoadmapViewState();
+}
+
+class _RoadmapViewState extends State<RoadmapView> {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      FirebaseAnalytics.instance.logEvent(
+        name: 'screen_view',
+        parameters: {'screen_name': 'roadmap'},
+      );
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
-    FirebaseAnalytics.instance.logEvent(
-      name: 'screen_view',
-      parameters: {'screen_name': 'roadmap'},
-    );
     return BlocProvider(
       create: (_) => RoadmapCubit(),
-      child: const AppScaffold(child: _RoadmapBody()),
+      child: const AppScaffold(children: [_Header(), _Timeline()]),
     );
   }
 }
 
-class _RoadmapBody extends StatelessWidget {
-  const _RoadmapBody();
+const double _timelineWidth = 860;
 
-  static const _statuses = ['All', 'Completed', 'In Progress', 'Planned'];
+Color _statusColor(AppPalette p, RoadmapStatus status) => switch (status) {
+  RoadmapStatus.shipped => p.success,
+  RoadmapStatus.inProgress => p.accent,
+  RoadmapStatus.next => p.info,
+};
+
+class _Header extends StatelessWidget {
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobileOrSmaller;
+    final compact = context.isMobileOrSmaller;
+    return GlowBackdrop(
+      child: PageSection(
+        top: compact ? 48 : 80,
+        bottom: 8,
+        maxWidth: _timelineWidth,
+        child: const SectionHeading(
+          eyebrow: 'Roadmap',
+          title: 'Where Just Game Engine is going.',
+          subtitle:
+              'Built from the changelogs of the engine, editor and CLI. '
+              'Shipped items carry their release dates; the rest is work in '
+              'progress or planned next.',
+          large: true,
+        ),
+      ),
+    );
+  }
+}
 
+class _Timeline extends StatelessWidget {
+  const _Timeline();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
     return BlocBuilder<RoadmapCubit, RoadmapState>(
       builder: (context, state) {
-        final filtered = state.filterStatus == 'All'
-            ? EngineData.roadmapItems
-            : EngineData.roadmapItems
-                  .where((item) => item.status == state.filterStatus)
-                  .toList();
+        final filters = [
+          RoadmapState.all,
+          for (final s in RoadmapStatus.values) s.label,
+        ];
+        final statuses =
+            [
+              RoadmapStatus.inProgress,
+              RoadmapStatus.next,
+              RoadmapStatus.shipped,
+            ].where(
+              (s) =>
+                  state.filterStatus == RoadmapState.all ||
+                  s.label == state.filterStatus,
+            );
 
-        // Group items by quarter
-        final groupedByQuarter = <String, List<RoadmapItem>>{};
-        for (final item in filtered) {
-          groupedByQuarter.putIfAbsent(item.quarter, () => []).add(item);
-        }
-
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 16 : 48,
-            vertical: isMobile ? 24 : 48,
-          ),
+        return PageSection(
+          top: 32,
+          maxWidth: _timelineWidth,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionHeader(
-                title: 'roadmap',
-                subtitle:
-                    'Our development timeline — see what\'s coming next for Just Game Engine.',
-              ),
-              // ── Filter chips ───────────────────────────────
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: _statuses.map((status) {
-                  final isSelected = state.filterStatus == status;
-                  return ChoiceChip(
-                    label: Text(status),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      context.read<RoadmapCubit>().filterByStatus(status);
-                    },
-                    selectedColor: _getStatusColor(status).withOpacity(0.2),
-                    labelStyle: isSelected
-                        ? AppTextStyles.label.copyWith(
-                            color: _getStatusColor(status),
-                          )
-                        : AppTextStyles.label,
-                    side: BorderSide(
-                      color: isSelected
-                          ? _getStatusColor(status)
-                          : AppColors.border,
+                children: [
+                  for (final f in filters)
+                    ChoiceChip(
+                      label: Text(f),
+                      selected: f == state.filterStatus,
+                      showCheckmark: false,
+                      onSelected: (_) =>
+                          context.read<RoadmapCubit>().filterByStatus(f),
+                      labelStyle: t.label.copyWith(
+                        fontSize: 13.5,
+                        color: f == state.filterStatus
+                            ? p.accentText
+                            : p.textSecondary,
+                      ),
+                      backgroundColor: p.surface,
+                      selectedColor: p.accentSoft,
+                      side: BorderSide(
+                        color: f == state.filterStatus
+                            ? p.accent.withValues(alpha: 0.5)
+                            : p.border,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
-                  );
-                }).toList(),
+                ],
               ),
+              for (final status in statuses) ...[
+                const SizedBox(height: 44),
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _statusColor(p, status),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(status.label, style: t.h2.copyWith(fontSize: 24)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                for (final item in RoadmapData.items)
+                  if (item.status == status) _TimelineRow(item: item),
+              ],
               const SizedBox(height: 40),
-              // ── Timeline ───────────────────────────────────
-              ...groupedByQuarter.entries.map((entry) {
-                return _QuarterSection(
-                  quarter: entry.key,
-                  items: entry.value,
-                  isMobile: isMobile,
-                );
-              }),
+              const Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  AppButton.secondary(
+                    label: 'Engine changelog',
+                    url: Links.engineChangelog,
+                  ),
+                  AppButton.secondary(
+                    label: 'Suggest something',
+                    url: Links.engineIssues,
+                  ),
+                ],
+              ),
             ],
           ),
         );
       },
     );
   }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Completed':
-        return AppColors.success;
-      case 'In Progress':
-        return AppColors.accent;
-      case 'Planned':
-        return AppColors.textMuted;
-      default:
-        return AppColors.accent;
-    }
-  }
 }
 
-class _QuarterSection extends StatelessWidget {
-  final String quarter;
-  final List<RoadmapItem> items;
-  final bool isMobile;
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({required this.item});
 
-  const _QuarterSection({
-    required this.quarter,
-    required this.items,
-    required this.isMobile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Quarter header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.accent.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            quarter,
-            style: AppTextStyles.headlineSmall.copyWith(
-              color: AppColors.accent,
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        // Items
-        ...items.map((item) => _RoadmapCard(item: item, isMobile: isMobile)),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
-}
-
-class _RoadmapCard extends StatefulWidget {
   final RoadmapItem item;
-  final bool isMobile;
-
-  const _RoadmapCard({required this.item, required this.isMobile});
-
-  @override
-  State<_RoadmapCard> createState() => _RoadmapCardState();
-}
-
-class _RoadmapCardState extends State<_RoadmapCard> {
-  bool _hovering = false;
-
-  Color get _statusColor {
-    switch (widget.item.status) {
-      case 'Completed':
-        return AppColors.success;
-      case 'In Progress':
-        return AppColors.accent;
-      case 'Planned':
-        return AppColors.textMuted;
-      default:
-        return AppColors.textMuted;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: EdgeInsets.all(widget.isMobile ? 16 : 24),
-        decoration: BoxDecoration(
-          color: _hovering ? AppColors.surfaceBright : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _hovering ? _statusColor.withOpacity(0.5) : AppColors.border,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Status indicator
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: _statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(widget.item.icon, color: _statusColor, size: 24),
+    final p = context.palette;
+    final t = context.type;
+    final color = _statusColor(p, item.status);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                const SizedBox(height: 26),
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: p.bg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color, width: 3),
+                  ),
+                ),
+                Expanded(child: Container(width: 2, color: p.border)),
+              ],
             ),
-            const SizedBox(width: 16),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.item.title,
-                          style: widget.isMobile
-                              ? AppTextStyles.headlineSmall.copyWith(
-                                  fontSize: 16,
-                                )
-                              : AppTextStyles.headlineSmall,
-                        ),
-                      ),
-                      _StatusBadge(
-                        status: widget.item.status,
-                        color: _statusColor,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: HoverCard(
+                url: item.url,
+                padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(item.icon, size: 20, color: color),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(item.title, style: t.h4)),
+                        const SizedBox(width: 12),
+                        Pill(label: item.when, dot: false, color: color),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(item.description, style: t.bodySmall),
+                    if (item.tags.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final tag in item.tags)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: p.surfaceAlt,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                tag,
+                                style: t.caption.copyWith(fontSize: 12),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.item.description,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  if (widget.item.tags.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: widget.item.tags.map((tag) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            tag,
-                            style: AppTextStyles.label.copyWith(fontSize: 11),
-                          ),
-                        );
-                      }).toList(),
-                    ),
                   ],
-                ],
+                ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  final Color color;
-
-  const _StatusBadge({required this.status, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        status,
-        style: AppTextStyles.label.copyWith(color: color, fontSize: 11),
+          ),
+        ],
       ),
     );
   }

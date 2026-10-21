@@ -1,5 +1,5 @@
 name: just_game_engine_site
-description: "Official website for Just Game Engine — a comprehensive 2D game engine built for Flutter."
+description: "Official website for Just Game Engine — a Flutter game engine with an in-game level editor and the just CLI."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -24,8 +24,10 @@ dependencies:
 
   # UI
   google_fonts: ^8.0.2
-  lottie: ^3.3.2
   url_launcher: ^6.3.1
+
+  # Web APIs (localStorage for the theme choice)
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -41,4 +43,4 @@ flutter:
 
   assets:
     - assets/icons/
-    - assets/animations/
+    - assets/screenshots/

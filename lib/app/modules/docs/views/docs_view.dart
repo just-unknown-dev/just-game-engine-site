@@ -1,33 +1,134 @@
+import 'dart:math' as math;
+
 import 'package:auto_route/auto_route.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/constants/engine_data.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/constants/docs/docs_index.dart';
+import '../../../core/constants/site.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_type.dart';
 import '../../../core/utils/responsive.dart';
-import '../../../core/widgets/code_block.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_nav_bar.dart';
+import '../../../core/widgets/cards.dart';
+import '../../../core/widgets/layout.dart';
+import '../../../core/widgets/markdown_view.dart';
 import '../cubit/docs_cubit.dart';
 import '../cubit/docs_state.dart';
 
+/// `/docs/<section>`: the documentation, one page at a time.
 @RoutePage()
-class DocsView extends StatelessWidget {
-  final String? section;
+class DocsView extends StatefulWidget {
   const DocsView({super.key, @PathParam('section') this.section});
+
+  final String? section;
+
+  @override
+  State<DocsView> createState() => _DocsViewState();
+}
+
+class _DocsViewState extends State<DocsView> {
+  late final DocsCubit _cubit;
+
+  @override
+  void initState() {
+    super.initState();
+    final id = DocsIndex.resolve(widget.section);
+    _cubit = DocsCubit(initialSection: id);
+    _logView(id);
+    _fixUrl(id);
+  }
+
+  @override
+  void didUpdateWidget(covariant DocsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section) {
+      final id = DocsIndex.resolve(widget.section);
+      if (id != _cubit.state.currentSection) {
+        _cubit.navigateToSection(id);
+        _logView(id);
+      }
+      _fixUrl(id);
+    }
+  }
+
+  /// Old or unknown ids show their new page; make the address bar agree.
+  void _fixUrl(String id) {
+    if (widget.section == id) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.router.replacePath('/docs/$id');
+    });
+  }
+
+  void _logView(String id) {
+    try {
+      FirebaseAnalytics.instance.logEvent(
+        name: 'screen_view',
+        parameters: {'screen_name': 'docs', 'section': id},
+      );
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final initialSection = section ?? 'getting-started';
-    FirebaseAnalytics.instance.logEvent(
-      name: 'screen_view',
-      parameters: {'screen_name': 'docs', 'section': initialSection},
-    );
-    return BlocProvider(
-      create: (_) => DocsCubit(initialSection: initialSection),
-      child: const Scaffold(body: _DocsLayout()),
+    return BlocProvider.value(
+      value: _cubit,
+      child: Scaffold(
+        body: Column(
+          children: [
+            const AppNavBar(maxWidth: kDocsWidth),
+            const Expanded(child: _DocsLayout()),
+          ],
+        ),
+      ),
     );
   }
+}
+
+/// Opens docs page [id] by changing the URL.
+void _open(BuildContext context, String id) {
+  context.router.navigatePath('/docs/$id');
+}
+
+/// Where the docs columns sit for a window width.
+///
+/// The columns are centred at [kDocsWidth] with the same side padding the
+/// nav bar uses, so the logo lines up with the sidebar and the nav's last
+/// icon with the "On this page" list.
+class _DocsGrid {
+  factory _DocsGrid(double windowWidth) {
+    final width = math.min(windowWidth - 2 * _pad, kDocsWidth);
+    final side = _pad + math.max((windowWidth - 2 * _pad - kDocsWidth) / 2, 0);
+    return _DocsGrid._(side: side, showToc: width >= 1200);
+  }
+
+  const _DocsGrid._({required this.side, required this.showToc});
+
+  static const _pad = 32.0;
+  static const sidebarWidth = 264.0;
+  static const tocWidth = 216.0;
+  static const gap = 48.0;
+
+  /// Space from each window edge to the grid.
+  final double side;
+  final bool showToc;
+
+  /// The article's padding inside a scroll view as wide as the window, so
+  /// the wheel scrolls it from anywhere outside the sidebar.
+  EdgeInsets get articlePadding => EdgeInsets.fromLTRB(
+    side + sidebarWidth + gap,
+    48,
+    side + (showToc ? tocWidth + gap : 0),
+    72,
+  );
 }
 
 class _DocsLayout extends StatelessWidget {
@@ -35,211 +136,62 @@ class _DocsLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobileOrSmaller;
+    final p = context.palette;
+    final compact = context.isMobileOrSmaller;
 
     return BlocBuilder<DocsCubit, DocsState>(
+      buildWhen: (a, b) => a.currentSection != b.currentSection,
       builder: (context, state) {
-        // Mobile layout: content with FAB to show sidebar
-        if (isMobile) {
-          return Scaffold(
-            body: _DocsContent(sectionId: state.currentSection, isMobile: true),
-            floatingActionButton: FloatingActionButton(
-              backgroundColor: AppColors.accent,
-              onPressed: () => _showDocsSidebar(context, state.currentSection),
-              child: const Icon(Icons.menu_book, color: Colors.white),
-            ),
+        final page = DocsIndex.byId(state.currentSection);
+
+        if (compact) {
+          return Column(
+            children: [
+              _MobileDocsBar(page: page),
+              Expanded(
+                child: _Article(key: ValueKey(page.id), page: page),
+              ),
+            ],
           );
         }
 
-        // Desktop layout: side-by-side
-        return Row(
-          children: [
-            // ── Sidebar ──────────────────────────────────
-            _DocsSidebar(currentSection: state.currentSection),
-            // ── Divider ──────────────────────────────────
-            const VerticalDivider(width: 1, color: AppColors.border),
-            // ── Content ──────────────────────────────────
-            Expanded(
-              child: _DocsContent(
-                sectionId: state.currentSection,
-                isMobile: false,
-              ),
-            ),
-          ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final grid = _DocsGrid(constraints.maxWidth);
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: _Article(
+                    key: ValueKey(page.id),
+                    page: page,
+                    grid: grid,
+                  ),
+                ),
+                Positioned(
+                  left: grid.side,
+                  top: 0,
+                  bottom: 0,
+                  width: _DocsGrid.sidebarWidth,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: p.bg,
+                      border: Border(right: BorderSide(color: p.border)),
+                    ),
+                    // The sidebar scrolls with the wheel; a scrollbar beside
+                    // its border only adds noise.
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(
+                        context,
+                      ).copyWith(scrollbars: false),
+                      child: const _Sidebar(),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
-    );
-  }
-
-  void _showDocsSidebar(BuildContext context, String currentSection) {
-    final cubit = context.read<DocsCubit>();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.bgDark,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => BlocProvider.value(
-        value: cubit,
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, scrollController) => _MobileDocsSidebar(
-            currentSection: currentSection,
-            scrollController: scrollController,
-            parentContext: context,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mobile Sidebar (bottom sheet)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MobileDocsSidebar extends StatelessWidget {
-  final String currentSection;
-  final ScrollController scrollController;
-  final BuildContext parentContext;
-
-  const _MobileDocsSidebar({
-    required this.currentSection,
-    required this.scrollController,
-    required this.parentContext,
-  });
-
-  static const _sidebarSections = _DocsSidebar._sidebarSections;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Handle bar
-        Container(
-          width: 40,
-          height: 4,
-          margin: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.textMuted,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        // Search
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: TextField(
-            onChanged: (q) => parentContext.read<DocsCubit>().search(q),
-            style: AppTextStyles.bodyMedium,
-            decoration: InputDecoration(
-              hintText: 'Search docs...',
-              hintStyle: AppTextStyles.bodySmall,
-              prefixIcon: const Icon(
-                Icons.search,
-                size: 18,
-                color: AppColors.textMuted,
-              ),
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-            ),
-          ),
-        ),
-        const Divider(height: 1, color: AppColors.border),
-        // Section list
-        Expanded(
-          child: BlocBuilder<DocsCubit, DocsState>(
-            builder: (context, state) {
-              return ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                children: [
-                  for (final group in _sidebarSections)
-                    _buildMobileGroup(context, group, state),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileGroup(
-    BuildContext context,
-    _SidebarGroup group,
-    DocsState state,
-  ) {
-    final filteredItems = state.searchQuery.isEmpty
-        ? group.items
-        : group.items
-              .where(
-                (item) => item.label.toLowerCase().contains(
-                  state.searchQuery.toLowerCase(),
-                ),
-              )
-              .toList();
-
-    if (filteredItems.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
-          child: Text(
-            group.title.toUpperCase(),
-            style: AppTextStyles.label.copyWith(
-              fontSize: 10,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ),
-        ...filteredItems.map((item) {
-          final isActive = currentSection == item.id;
-          return ListTile(
-            dense: true,
-            title: Text(
-              item.label,
-              style: isActive
-                  ? AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.w600,
-                    )
-                  : AppTextStyles.bodyMedium,
-            ),
-            trailing: isActive
-                ? Container(
-                    width: 4,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  )
-                : null,
-            onTap: () {
-              Navigator.pop(context);
-              parentContext.read<DocsCubit>().navigateToSection(item.id);
-              FirebaseAnalytics.instance.logEvent(
-                name: 'docs_section_viewed',
-                parameters: {'section': item.id},
-              );
-            },
-          );
-        }),
-      ],
     );
   }
 }
@@ -248,645 +200,606 @@ class _MobileDocsSidebar extends StatelessWidget {
 // Sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DocsSidebar extends StatelessWidget {
-  final String currentSection;
-  const _DocsSidebar({required this.currentSection});
+class _Sidebar extends StatefulWidget {
+  const _Sidebar({this.onNavigate, this.controller});
 
-  static const _sidebarSections = [
-    _SidebarGroup('Getting Started', [
-      _SidebarItem('getting-started', 'Quick Start'),
-    ]),
-    _SidebarGroup('Core Systems', [
-      _SidebarItem('core', 'Core Engine'),
-      _SidebarItem('math', 'Math Module'),
-      _SidebarItem('memory', 'Memory Management'),
-    ]),
-    _SidebarGroup('Visual', [
-      _SidebarItem('rendering', 'Rendering Engine'),
-      _SidebarItem('parallax', 'Parallax Background System'),
-      _SidebarItem('sprites', 'Sprite System'),
-      _SidebarItem('sprite-atlas', 'Sprite Atlas'),
-      _SidebarItem('animation', 'Animation System'),
-      _SidebarItem('particles', 'Particle Effects'),
-      _SidebarItem('post-processing', 'Post-Processing'),
-    ]),
-    _SidebarGroup('Gameplay', [
-      _SidebarItem('physics', 'Physics Engine'),
-      _SidebarItem('raycasting', 'Ray Casting & Tracing'),
-      _SidebarItem('scene-graph', 'Scene Graph'),
-      _SidebarItem('ecs', 'Entity-Component System'),
-      _SidebarItem('input', 'Input Management'),
-      _SidebarItem('deterministic-effects', 'Deterministic Effects'),
-      _SidebarItem('narrative', 'Narrative & Dialogue'),
-    ]),
-    _SidebarGroup('Utilities', [
-      _SidebarItem('assets', 'Asset Management'),
-      _SidebarItem('audio', 'Audio Engine'),
-      _SidebarItem('tiledmap', 'Tiled Map Support'),
-      _SidebarItem('localization', 'Localization'),
-    ]),
-  ];
+  /// Called after a page is picked (the mobile sheet closes itself).
+  final VoidCallback? onNavigate;
+  final ScrollController? controller;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 260,
-      color: AppColors.bgDark,
-      child: Column(
-        children: [
-          // ── Search ─────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              onChanged: (q) => context.read<DocsCubit>().search(q),
-              style: AppTextStyles.bodyMedium,
-              decoration: InputDecoration(
-                hintText: 'Search docs...',
-                hintStyle: AppTextStyles.bodySmall,
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 18,
-                  color: AppColors.textMuted,
-                ),
-                filled: true,
-                fillColor: AppColors.surface,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.accent),
-                ),
-              ),
-            ),
-          ),
-          // ── Section list ───────────────────────────
-          Expanded(
-            child: BlocBuilder<DocsCubit, DocsState>(
-              buildWhen: (prev, curr) =>
-                  prev.searchQuery != curr.searchQuery ||
-                  prev.currentSection != curr.currentSection,
-              builder: (context, state) {
-                return ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  children: [
-                    for (final group in _sidebarSections)
-                      _buildGroup(context, group, state),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+  State<_Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<_Sidebar> {
+  late final TextEditingController _search;
+
+  @override
+  void initState() {
+    super.initState();
+    _search = TextEditingController(
+      text: context.read<DocsCubit>().state.searchQuery,
     );
   }
 
-  Widget _buildGroup(
-    BuildContext context,
-    _SidebarGroup group,
-    DocsState state,
-  ) {
-    final filteredItems = state.searchQuery.isEmpty
-        ? group.items
-        : group.items
-              .where(
-                (item) => item.label.toLowerCase().contains(
-                  state.searchQuery.toLowerCase(),
-                ),
-              )
-              .toList();
-
-    if (filteredItems.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
-          child: Text(
-            group.title.toUpperCase(),
-            style: AppTextStyles.label.copyWith(
-              fontSize: 10,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ),
-        ...filteredItems.map((item) {
-          final isActive = state.currentSection == item.id;
-          return _SidebarItemWidget(
-            item: item,
-            isActive: isActive,
-            onTap: () {
-              context.read<DocsCubit>().navigateToSection(item.id);
-              FirebaseAnalytics.instance.logEvent(
-                name: 'docs_section_viewed',
-                parameters: {'section': item.id},
-              );
-            },
-          );
-        }),
-      ],
-    );
-  }
-}
-
-class _SidebarGroup {
-  final String title;
-  final List<_SidebarItem> items;
-  const _SidebarGroup(this.title, this.items);
-}
-
-class _SidebarItem {
-  final String id;
-  final String label;
-  const _SidebarItem(this.id, this.label);
-}
-
-class _SidebarItemWidget extends StatefulWidget {
-  final _SidebarItem item;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _SidebarItemWidget({
-    required this.item,
-    required this.isActive,
-    required this.onTap,
-  });
-
   @override
-  State<_SidebarItemWidget> createState() => _SidebarItemWidgetState();
-}
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
-class _SidebarItemWidgetState extends State<_SidebarItemWidget> {
-  bool _hovering = false;
+  void _pick(String id) {
+    widget.onNavigate?.call();
+    _open(context, id);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: widget.isActive
-                ? AppColors.accent.withOpacity(0.1)
-                : _hovering
-                ? AppColors.surfaceVariant
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            border: Border(
-              left: BorderSide(
-                color: widget.isActive ? AppColors.accent : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Text(
-            widget.item.label,
-            style: widget.isActive
-                ? AppTextStyles.bodyMedium.copyWith(color: AppColors.accent)
-                : AppTextStyles.bodyMedium,
-          ),
-        ),
-      ),
-    );
-  }
-}
+    final p = context.palette;
+    final t = context.type;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Content
-// ─────────────────────────────────────────────────────────────────────────────
+    return BlocBuilder<DocsCubit, DocsState>(
+      builder: (context, state) {
+        final query = state.searchQuery.trim();
+        final results = DocsIndex.search(query);
 
-class _DocsContent extends StatelessWidget {
-  final String sectionId;
-  final bool isMobile;
-
-  const _DocsContent({required this.sectionId, this.isMobile = false});
-
-  @override
-  Widget build(BuildContext context) {
-    if (sectionId == 'getting-started') {
-      return _GettingStartedContent(isMobile: isMobile);
-    }
-
-    final subsystem = EngineData.subsystems
-        .where((s) => s.id == sectionId)
-        .firstOrNull;
-    if (subsystem == null) {
-      return Center(
-        child: Text('Section not found', style: AppTextStyles.headlineMedium),
-      );
-    }
-
-    return _SubsystemContent(subsystem: subsystem, isMobile: isMobile);
-  }
-}
-
-class _GettingStartedContent extends StatelessWidget {
-  final bool isMobile;
-
-  const _GettingStartedContent({this.isMobile = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 20 : 48),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Getting Started',
-                  style: AppTextStyles.displayMedium.copyWith(fontSize: 24),
-                ),
-                const SizedBox(height: 24),
-                _RichDocsText(content: EngineData.gettingStartedContent),
-                const SizedBox(height: 24),
-                CodeBlock(
-                  code: EngineData.gettingStartedCode,
-                  title: 'main.dart',
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Text content ─────────────────────────────
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Getting Started',
-                        style: AppTextStyles.displayMedium,
-                      ),
-                      const SizedBox(height: 24),
-                      _RichDocsText(content: EngineData.gettingStartedContent),
-                    ],
+        return Column(
+          children: [
+            Padding(
+              padding: widget.controller == null
+                  // Desktop: flush with the grid's left edge (and the logo).
+                  ? const EdgeInsets.fromLTRB(0, 40, 20, 12)
+                  : const EdgeInsets.fromLTRB(18, 4, 18, 8),
+              child: TextField(
+                controller: _search,
+                onChanged: context.read<DocsCubit>().search,
+                style: t.bodySmall.copyWith(color: p.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Search the docs',
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 19,
+                    color: p.textMuted,
                   ),
-                ),
-                const SizedBox(width: 32),
-                // ── Code example ─────────────────────────────
-                Expanded(
-                  flex: 4,
-                  child: CodeBlock(
-                    code: EngineData.gettingStartedCode,
-                    title: 'main.dart',
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-class _SubsystemContent extends StatelessWidget {
-  final EngineSubsystem subsystem;
-  final bool isMobile;
-
-  const _SubsystemContent({required this.subsystem, this.isMobile = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(isMobile ? 20 : 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header ─────────────────────────────────
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(isMobile ? 10 : 12),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  subsystem.icon,
-                  color: AppColors.accent,
-                  size: isMobile ? 24 : 28,
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear',
+                          iconSize: 17,
+                          icon: Icon(Icons.close_rounded, color: p.textMuted),
+                          onPressed: () {
+                            _search.clear();
+                            context.read<DocsCubit>().clearSearch();
+                          },
+                        ),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subsystem.name,
-                      style: isMobile
-                          ? AppTextStyles.displayMedium.copyWith(fontSize: 20)
-                          : AppTextStyles.displayMedium,
-                    ),
-                    Text(subsystem.category, style: AppTextStyles.label),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-
-          // Mobile: stacked layout
-          if (isMobile) ...[
-            _RichDocsText(content: subsystem.docsContent),
-            const SizedBox(height: 24),
-            CodeBlock(code: subsystem.codeExample, title: subsystem.codeTitle),
-            const SizedBox(height: 32),
-            Text(
-              'Features',
-              style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
             ),
-            const SizedBox(height: 12),
-            ...subsystem.features.map(
-              (f) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Icon(
-                        Icons.check_circle,
-                        size: 14,
-                        color: AppColors.accent,
+            Expanded(
+              child: ListView(
+                controller: widget.controller,
+                padding: widget.controller == null
+                    ? const EdgeInsets.fromLTRB(0, 0, 16, 40)
+                    : const EdgeInsets.fromLTRB(10, 4, 10, 32),
+                children: [
+                  if (query.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
+                      child: Text(
+                        results.isEmpty
+                            ? 'No pages match "$query".'
+                            : '${results.length} '
+                                  '${results.length == 1 ? 'page' : 'pages'}',
+                        style: t.caption,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(f, style: AppTextStyles.bodyMedium)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'API Reference',
-              style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
-            ),
-            const SizedBox(height: 12),
-            _ApiReferenceTable(classes: subsystem.apiClasses),
-          ] else ...[
-            // Desktop: side-by-side layout
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _RichDocsText(content: subsystem.docsContent),
-                      const SizedBox(height: 32),
-
-                      // ── Features ──────────────────────────
-                      Text('Features', style: AppTextStyles.headlineMedium),
-                      const SizedBox(height: 12),
-                      ...subsystem.features.map(
-                        (f) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.only(top: 8),
-                                child: Icon(
-                                  Icons.check_circle,
-                                  size: 14,
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(f, style: AppTextStyles.bodyMedium),
-                              ),
-                            ],
+                    for (final page in results)
+                      _SidebarItem(
+                        title: page.title,
+                        subtitle: page.summary,
+                        active: page.id == state.currentSection,
+                        onTap: () => _pick(page.id),
+                      ),
+                  ] else
+                    for (final (group, pages) in DocsIndex.grouped) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
+                        child: Text(
+                          group.toUpperCase(),
+                          style: t.eyebrow.copyWith(
+                            fontSize: 11.5,
+                            color: p.textMuted,
+                            letterSpacing: 1.4,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 32),
-
-                      // ── API Reference ─────────────────────
-                      Text(
-                        'API Reference',
-                        style: AppTextStyles.headlineMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      _ApiReferenceTable(classes: subsystem.apiClasses),
+                      for (final page in pages)
+                        _SidebarItem(
+                          title: page.title,
+                          active: page.id == state.currentSection,
+                          onTap: () => _pick(page.id),
+                        ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 32),
-                // ── Code example ─────────────────────────
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    children: [
-                      CodeBlock(
-                        code: subsystem.codeExample,
-                        title: subsystem.codeTitle,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-/// Simple rich text renderer for docs content (handles **bold** and `code`).
-class _RichDocsText extends StatelessWidget {
-  final String content;
-  const _RichDocsText({required this.content});
+class _SidebarItem extends StatefulWidget {
+  const _SidebarItem({
+    required this.title,
+    required this.active,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool active;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final paragraphs = content.split('\n\n');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final para in paragraphs) ...[
-          if (para.startsWith('•'))
-            ...para
-                .split('\n')
-                .map(
-                  (line) => Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '• ',
-                          style: TextStyle(color: AppColors.accent),
-                        ),
-                        Expanded(
-                          child: _buildRichLine(line.replaceFirst('• ', '')),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-          else if (para.startsWith('```'))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: CodeBlock(
-                code: para.replaceAll(RegExp(r'```\w*\n?'), '').trim(),
-                showLineNumbers: false,
-                title: 'dart',
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildRichLine(para),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildRichLine(String text) {
-    final spans = <InlineSpan>[];
-    final regex = RegExp(r'(\*\*[^*]+\*\*|`[^`]+`)');
-    int lastEnd = 0;
-
-    for (final match in regex.allMatches(text)) {
-      if (match.start > lastEnd) {
-        spans.add(
-          TextSpan(
-            text: text.substring(lastEnd, match.start),
-            style: AppTextStyles.bodyLarge,
-          ),
-        );
-      }
-      final token = match.group(0)!;
-      if (token.startsWith('**')) {
-        spans.add(
-          TextSpan(
-            text: token.replaceAll('**', ''),
-            style: AppTextStyles.bodyLarge.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        );
-      } else {
-        spans.add(
-          TextSpan(
-            text: token.replaceAll('`', ''),
-            style: AppTextStyles.code.copyWith(
-              backgroundColor: AppColors.codeBg,
-              color: AppColors.accentLight,
-            ),
-          ),
-        );
-      }
-      lastEnd = match.end;
-    }
-
-    if (lastEnd < text.length) {
-      spans.add(
-        TextSpan(text: text.substring(lastEnd), style: AppTextStyles.bodyLarge),
-      );
-    }
-
-    return RichText(text: TextSpan(children: spans));
-  }
+  State<_SidebarItem> createState() => _SidebarItemState();
 }
 
-/// Table showing API classes for a subsystem.
-class _ApiReferenceTable extends StatelessWidget {
-  final List<ApiClass> classes;
-  const _ApiReferenceTable({required this.classes});
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Bring the open page into view when the sidebar first shows it.
+    if (widget.active) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Scrollable.ensureVisible(context, alignment: 0.35);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
+    final p = context.palette;
+    final t = context.type;
+    return Semantics(
+      selected: widget.active,
+      button: true,
+      child: InkWell(
+        onTap: widget.onTap,
+        onHover: (h) => setState(() => _hover = h),
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          // Header row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Class',
-                    style: AppTextStyles.label.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+        hoverColor: Colors.transparent,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+          decoration: BoxDecoration(
+            color: widget.active
+                ? p.accentSoft
+                : (_hover ? p.surfaceAlt : Colors.transparent),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: t.bodySmall.copyWith(
+                  height: 1.35,
+                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
+                  color: widget.active
+                      ? p.accentText
+                      : (_hover ? p.textPrimary : p.textSecondary),
                 ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Description',
-                    style: AppTextStyles.label.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              ),
+              if (widget.subtitle != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  widget.subtitle!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.caption.copyWith(fontSize: 12.5),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileDocsBar extends StatelessWidget {
+  const _MobileDocsBar({required this.page});
+
+  final DocPage page;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: p.bgElevated,
+        border: Border(bottom: BorderSide(color: p.border)),
+      ),
+      child: Row(
+        children: [
+          TextButton.icon(
+            onPressed: () => _showSheet(context),
+            icon: Icon(Icons.menu_book_outlined, size: 18, color: p.accent),
+            label: Text(
+              'Browse docs',
+              style: t.label.copyWith(fontSize: 14, color: p.textPrimary),
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
-          // Data rows
-          ...classes.map(
-            (c) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.border, width: 0.5),
-                ),
-              ),
-              child: Row(
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${page.group} / ${page.title}',
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: t.caption,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSheet(BuildContext context) {
+    final cubit = context.read<DocsCubit>();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheet) => BlocProvider.value(
+        value: cubit,
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (_, controller) => _Sidebar(
+            controller: controller,
+            onNavigate: () => Navigator.of(sheet).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Article
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Article extends StatefulWidget {
+  const _Article({super.key, required this.page, this.grid});
+
+  final DocPage page;
+
+  /// The desktop column grid; null on narrow screens.
+  final _DocsGrid? grid;
+
+  @override
+  State<_Article> createState() => _ArticleState();
+}
+
+class _ArticleState extends State<_Article> {
+  late final List<MarkdownHeading> _outline;
+  late final Map<String, GlobalKey> _anchors;
+  final _active = ValueNotifier<String?>(null);
+
+  /// Each page scrolls on its own, from the top.
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _outline = MarkdownView.outline(widget.page.body);
+    _anchors = {for (final h in _outline) h.slug: GlobalKey()};
+    _active.value = _outline.isEmpty ? null : _outline.first.slug;
+    _scroll.addListener(_trackActive);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _active.dispose();
+    super.dispose();
+  }
+
+  /// Marks the last heading scrolled past the top as current.
+  void _trackActive() {
+    String? current = _outline.isEmpty ? null : _outline.first.slug;
+    for (final h in _outline) {
+      final box =
+          _anchors[h.slug]?.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      final y = box.localToGlobal(Offset.zero).dy;
+      if (y < AppNavBar.height + 120) current = h.slug;
+    }
+    _active.value = current;
+  }
+
+  void _jumpTo(String slug) {
+    final ctx = _anchors[slug]?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grid = widget.grid;
+    final page = widget.page;
+
+    final body = Scrollbar(
+      controller: _scroll,
+      child: SingleChildScrollView(
+        controller: _scroll,
+        padding:
+            grid?.articlePadding ?? const EdgeInsets.fromLTRB(20, 28, 20, 64),
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: SelectionArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      c.name,
-                      style: AppTextStyles.code.copyWith(
-                        color: AppColors.accentLight,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(c.description, style: AppTextStyles.bodySmall),
-                  ),
+                  _ArticleHeader(page: page),
+                  const SizedBox(height: 36),
+                  MarkdownView(page.body, anchors: _anchors),
+                  const SizedBox(height: 40),
+                  _PrevNext(id: page.id),
+                  const SizedBox(height: 32),
+                  const _ArticleFooter(),
                 ],
               ),
             ),
           ),
+        ),
+      ),
+    );
+
+    if (grid == null || !grid.showToc || _outline.isEmpty) return body;
+    // The list sits over the scroll view at the grid's right edge, only as
+    // tall as its content, so the wheel still scrolls the page below it.
+    return Stack(
+      children: [
+        Positioned.fill(child: body),
+        Positioned(
+          top: 48,
+          right: grid.side,
+          width: _DocsGrid.tocWidth,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight:
+                  MediaQuery.sizeOf(context).height - AppNavBar.height - 96,
+            ),
+            child: ValueListenableBuilder<String?>(
+              valueListenable: _active,
+              builder: (context, active, _) =>
+                  _Toc(outline: _outline, active: active, onTap: _jumpTo),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ArticleHeader extends StatelessWidget {
+  const _ArticleHeader({required this.page});
+
+  final DocPage page;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.type;
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Docs', style: t.caption),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: p.textMuted,
+              ),
+            ),
+            Text(
+              page.group,
+              style: t.caption.copyWith(
+                color: p.accentText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          page.title,
+          style: t.h1.copyWith(fontSize: context.isMobileOrSmaller ? 30 : 40),
+        ),
+        const SizedBox(height: 14),
+        Text(page.summary, style: t.lead),
+        if (page.id == DocsIndex.defaultId || page.id == 'installation') ...[
+          const SizedBox(height: 20),
+          const Pill(label: 'Written for ${Versions.engine}'),
+        ],
+      ],
+    );
+  }
+}
+
+class _Toc extends StatelessWidget {
+  const _Toc({
+    required this.outline,
+    required this.active,
+    required this.onTap,
+  });
+
+  final List<MarkdownHeading> outline;
+  final String? active;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ON THIS PAGE',
+            style: t.eyebrow.copyWith(
+              fontSize: 11.5,
+              color: p.textMuted,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final h in outline)
+            InkWell(
+              onTap: () => onTap(h.slug),
+              borderRadius: BorderRadius.circular(6),
+              hoverColor: p.surfaceAlt,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: h.slug == active ? p.accent : p.border,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  h.text.replaceAll('`', ''),
+                  style: t.caption.copyWith(
+                    fontSize: 13.5,
+                    height: 1.4,
+                    color: h.slug == active ? p.accentText : p.textSecondary,
+                    fontWeight: h.slug == active ? FontWeight.w600 : null,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrevNext extends StatelessWidget {
+  const _PrevNext({required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context) {
+    final prev = DocsIndex.previous(id);
+    final next = DocsIndex.next(id);
+
+    Widget card(DocPage page, {required bool forward}) {
+      final t = context.type;
+      final p = context.palette;
+      return HoverCard(
+        onTap: () => _open(context, page.id),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          crossAxisAlignment: forward
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            Text(forward ? 'Next' : 'Previous', style: t.caption),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!forward) ...[
+                  Icon(Icons.arrow_back_rounded, size: 16, color: p.accentText),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    page.title,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.label.copyWith(color: p.accentText),
+                  ),
+                ),
+                if (forward) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 16,
+                    color: p.accentText,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: prev == null
+              ? const SizedBox.shrink()
+              : card(prev, forward: false),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: next == null
+              ? const SizedBox.shrink()
+              : card(next, forward: true),
+        ),
+      ],
+    );
+  }
+}
+
+class _ArticleFooter extends StatelessWidget {
+  const _ArticleFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
+    return Container(
+      padding: const EdgeInsets.only(top: 24),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: p.border)),
+      ),
+      child: Wrap(
+        spacing: 24,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Something wrong or missing?', style: t.caption),
+          const ArrowLink(label: 'Open an issue', url: Links.engineIssues),
+          const ArrowLink(label: 'API reference', url: Links.apiReference),
+          const ArrowLink(label: 'Ask on Discord', url: Links.discord),
         ],
       ),
     );

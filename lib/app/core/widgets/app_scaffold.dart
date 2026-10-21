@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'app_footer.dart';
 import 'app_nav_bar.dart';
 
-/// Shared scaffold that wraps all pages with a persistent nav bar and footer.
+/// A page: the nav bar fixed at the top, then [children] and the footer in
+/// one scroll view.
 class AppScaffold extends StatelessWidget {
-  final Widget child;
-  final bool showFooter;
+  const AppScaffold({super.key, required this.children, this.controller});
 
-  const AppScaffold({super.key, required this.child, this.showFooter = true});
+  final List<Widget> children;
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -17,20 +18,19 @@ class AppScaffold extends StatelessWidget {
         children: [
           const AppNavBar(),
           Expanded(
-            child: showFooter
-                ? CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(child: child),
-                      const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [AppFooter()],
-                        ),
-                      ),
-                    ],
-                  )
-                : child,
+            child: CustomScrollView(
+              controller: controller,
+              slivers: [
+                SliverList.list(children: children),
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: AppFooter(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

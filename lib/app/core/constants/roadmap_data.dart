@@ -1,287 +1,205 @@
 import 'package:flutter/material.dart';
 
-import 'engine_models.dart';
+enum RoadmapStatus {
+  shipped('Shipped'),
+  inProgress('In progress'),
+  next('Next');
 
-/// Roadmap data for the Roadmap page.
+  const RoadmapStatus(this.label);
+  final String label;
+}
+
+class RoadmapItem {
+  const RoadmapItem({
+    required this.title,
+    required this.when,
+    required this.description,
+    required this.status,
+    required this.icon,
+    this.tags = const [],
+    this.url,
+  });
+
+  final String title;
+
+  /// A release date, or a rough "when" for work not yet released.
+  final String when;
+  final String description;
+  final RoadmapStatus status;
+  final IconData icon;
+  final List<String> tags;
+
+  /// Where to read more: a changelog, a docs page.
+  final String? url;
+}
+
+/// Built from the engine, editor and CLI changelogs. Newest first in each
+/// group.
 abstract final class RoadmapData {
-  static const List<RoadmapItem> roadmapItems = [
-    // Q1 2026 - Core 1.x foundation and feature expansion
+  static const items = <RoadmapItem>[
+    // ── Next ─────────────────────────────────────────────────────
     RoadmapItem(
-      title: 'Core Engine v1.0',
+      title: '3.0: deprecated APIs removed',
+      when: 'Later',
+      status: RoadmapStatus.next,
+      icon: Icons.cleaning_services_outlined,
       description:
-          'Stable release of the core game loop with fixed timestep, lifecycle management, and time scaling.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.memory,
-      tags: ['Core', 'Stable'],
+          'The APIs deprecated in 2.0 go: Engine.getSystem, the legacy '
+          'renderable path, Engine.parallax and ParallaxSystem, '
+          'onRenderBackground/onRenderOverlay, TagComponent.tag, '
+          'HierarchySystem and Entity.generation.',
+      tags: ['Engine', 'Breaking'],
+      url: '/docs/migration',
     ),
     RoadmapItem(
-      title: 'Rendering Engine v1.0',
+      title: '3D renderer: incremental updates',
+      when: 'Next',
+      status: RoadmapStatus.next,
+      icon: Icons.view_in_ar_outlined,
       description:
-          'Direct Canvas rendering with cameras, viewport management, and custom shaders.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.brush,
-      tags: ['Rendering', 'Visual'],
+          'Today the 3D scene renderer re-adds every model instance when '
+          'it rebuilds: fine at scene load, not for spawning many entities '
+          'each frame. Local-space timeline tracks are also still to come.',
+      tags: ['3D', 'Timelines'],
     ),
     RoadmapItem(
-      title: 'Sprite System v1.0',
+      title: 'Live audio controls',
+      when: 'Next',
+      status: RoadmapStatus.next,
+      icon: Icons.graphic_eq_rounded,
       description:
-          'Sprite loading, atlas support, 9-slice scaling, and texture batching.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.image,
-      tags: ['Sprites', 'Visual'],
+          'Change the pitch, pan, speed and loop of a sound while it plays, '
+          'and apply channel volume to streams. Waits on an update to '
+          'just_audio_engine.',
+      tags: ['Audio'],
     ),
     RoadmapItem(
-      title: 'Animation System v1.0',
+      title: 'Joint anchors and jointed bodies',
+      when: 'Next',
+      status: RoadmapStatus.next,
+      icon: Icons.link_rounded,
       description:
-          'Frame-based and interpolated animations with state machines, easing curves, and Lottie support.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.animation,
-      tags: ['Animation', 'Visual'],
+          'Pass joint anchors to the physics engine, stop the pure-Dart '
+          'backend pushing jointed bodies apart, and let native queries see '
+          'bodies with mask 0. Waits on an update to just_physics_engine.',
+      tags: ['Physics'],
+    ),
+    // ── In progress ──────────────────────────────────────────────
+    RoadmapItem(
+      title: 'Just Game Engine 2.0 stable',
+      when: 'Now',
+      status: RoadmapStatus.inProgress,
+      icon: Icons.rocket_launch_outlined,
+      description:
+          'The 2.0 dev series continues (2.0.0-dev.2 is on pub.dev) '
+          'towards a stable release. Until then, 1.6.1 is the latest '
+          'stable version.',
+      tags: ['Engine', 'Release'],
+      url: '/docs/migration',
     ),
     RoadmapItem(
-      title: 'Particle Effects v1.0',
+      title: 'Examples for 2.0',
+      when: 'Now',
+      status: RoadmapStatus.inProgress,
+      icon: Icons.play_circle_outline_rounded,
       description:
-          'GPU-accelerated particle system with 8 emitter shapes, blending modes, and emission patterns.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.auto_awesome,
-      tags: ['Particles', 'Visual'],
+          'The live examples are still written for 1.x. Meanwhile, the '
+          'engine repository\'s example and the templates\' showcase scenes '
+          'show 2.0.',
+      tags: ['Examples', 'Docs'],
+    ),
+    // ── Shipped ──────────────────────────────────────────────────
+    RoadmapItem(
+      title: 'just CLI 0.1',
+      when: 'Oct 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.terminal_rounded,
+      description:
+          'just_core_cli and its game plugin, just_game_engine_cli: create, '
+          'run and build games, manage scenes, check that releases hold no '
+          'editor, and upgrade the engine\'s packages as one set.',
+      tags: ['CLI', 'New'],
+      url: '/cli',
     ),
     RoadmapItem(
-      title: 'Physics Engine v1.0',
+      title: 'Level editor 0.1 (dev)',
+      when: 'Oct 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.design_services_outlined,
       description:
-          'Rigid body physics with SAT collision detection, elastic response, and collision layers.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.science,
-      tags: ['Physics', 'Gameplay'],
+          'just_game_engine_editor: a level editor that runs inside your '
+          'game in debug builds. 2D and 3D scenes, Level Designer, '
+          'materials, timelines, physics and play-testing on one undo stack.',
+      tags: ['Editor', 'New'],
+      url: '/editor',
     ),
     RoadmapItem(
-      title: 'Scene Graph v1.0',
+      title: 'Just Game Engine 2.0 (dev)',
+      when: 'Oct 15, 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.auto_awesome_outlined,
       description:
-          'Hierarchical scene tree with parent-child transforms, named lookups, and multi-scene management.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.account_tree,
-      tags: ['Scene', 'Gameplay'],
+          'A breaking release: engines you create and dispose, opt-in 3D '
+          'graphics and Jolt 3D physics, Box2D v3 2D physics, virtual '
+          'cameras, timelines, level maps, action-based input and scene '
+          'format 9 with migrations.',
+      tags: ['Engine', 'Breaking'],
+      url: '/docs/migration',
     ),
     RoadmapItem(
-      title: 'Entity-Component System v1.0',
+      title: 'Just Game Engine 1.6',
+      when: 'May 30, 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.emoji_events_outlined,
       description:
-          'Data-oriented ECS with 14 built-in components, 9 systems, entity queries, and hierarchy support.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.widgets,
-      tags: ['ECS', 'Gameplay'],
+          'A developer terminal, game services (achievements, sign-in, '
+          'leaderboards, currency, inventory, ads), subtitles and '
+          'checkpoints; physics moved to just_physics_engine. 1.6.1 '
+          '(Aug 2) added unified shape styling.',
+      tags: ['Engine'],
     ),
     RoadmapItem(
-      title: 'Input Management v1.0',
+      title: 'Just Game Engine 1.5',
+      when: 'Apr 4, 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.movie_filter_outlined,
       description:
-          'Unified polling-based input for keyboard, mouse, touch, and gamepad with dead zone support.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.gamepad,
-      tags: ['Input', 'Gameplay'],
+          'Post-processing shaders, sprite atlases, deterministic effects, '
+          'localization and Yarn Spinner dialogue; audio on '
+          'just_audio_engine. Later 1.5 releases added shape components and '
+          'just_debugger.',
+      tags: ['Engine'],
     ),
     RoadmapItem(
-      title: 'Parallax Background System v1.0',
+      title: 'Just Game Engine 1.4',
+      when: 'Mar 21, 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.speed_rounded,
       description:
-          'First-class multi-layer parallax backgrounds with camera-relative depth scrolling and auto-scroll.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.layers,
-      tags: ['Parallax', 'Visual'],
+          'An architecture and performance overhaul, parallax backgrounds '
+          'and a virtual joystick widget.',
+      tags: ['Engine'],
     ),
     RoadmapItem(
-      title: 'Virtual Joystick Widget v1.0',
+      title: 'Just Game Engine 1.1 – 1.3',
+      when: 'Mar 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.grid_on_rounded,
       description:
-          'Reusable touch joystick with fixed/floating layouts and ECS joystick component integration.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.touch_app,
-      tags: ['Input', 'Mobile'],
+          'Rigid-body physics with impulse resolution (1.1), raycasting, '
+          'ray tracing and audio components (1.2), and Tiled maps in the '
+          'ECS (1.3).',
+      tags: ['Engine'],
     ),
     RoadmapItem(
-      title: 'Asset Management v1.0',
+      title: 'Just Game Engine 1.0',
+      when: 'Feb 16, 2026',
+      status: RoadmapStatus.shipped,
+      icon: Icons.flag_outlined,
       description:
-          'Efficient asset loading and caching for images, audio, text, JSON, and binary files with bundle support.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.folder_open,
-      tags: ['Assets', 'Utilities'],
-    ),
-    RoadmapItem(
-      title: 'Audio Engine v1.0',
-      description:
-          'Multi-channel audio with master/music/SFX/voice/ambient channels, sound pooling, and fade effects.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.music_note,
-      tags: ['Audio', 'Utilities'],
-    ),
-
-    RoadmapItem(
-      title: 'Physics Engine v2.0',
-      description:
-          'Enhanced SAT collision detection with improved performance and new collision shapes.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.science,
-      tags: ['Physics', 'Performance'],
-    ),
-    RoadmapItem(
-      title: 'Raycasting v1.0',
-      description:
-          '2D raycasting system for line-of-sight, shooting mechanics, and visibility checks.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.linear_scale_rounded,
-      tags: ['Raycasting', 'Gameplay'],
-    ),
-    RoadmapItem(
-      title: 'Tilemap Editor Integration',
-      description:
-          'Native support for Tiled map formats via just_tiled with GPU-batched rendering.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.grid_on,
-      tags: ['Tilemaps', 'Tools'],
-    ),
-    RoadmapItem(
-      title: 'Reactive ECS v1.0',
-      description:
-          'Signal-driven ECS wrappers via just_signals for surgical UI updates without polling.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.bolt,
-      tags: ['ECS', 'Reactive'],
-    ),
-    RoadmapItem(
-      title: 'Post-Processing v1.0',
-      description:
-          'Full-screen FragmentShader passes, per-entity shader layers, and ECS PostProcessSystem.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.filter,
-      tags: ['Rendering', 'Visual'],
-    ),
-    RoadmapItem(
-      title: 'Sprite Atlas v1.0',
-      description:
-          'Auto-detecting TexturePacker/Aseprite atlas parser with named regions and animation clips.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.view_comfy,
-      tags: ['Sprites', 'Performance'],
-    ),
-    RoadmapItem(
-      title: 'Deterministic Effects v1.0',
-      description:
-          'Tick-based effects with rollback support, JSON/binary serialization, and ECS integration.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.replay,
-      tags: ['Effects', 'Multiplayer'],
-    ),
-    RoadmapItem(
-      title: 'Localization v1.0',
-      description:
-          'Engine-wide i18n with namespace support, ICU-lite templating, fallback chains, and signal-driven widgets.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.language,
-      tags: ['i18n', 'Utilities'],
-    ),
-    RoadmapItem(
-      title: 'Narrative & Dialogue v1.0',
-      description:
-          'Full Yarn Spinner 2.x parser and runtime with ECS integration and ready-made Flutter UI widgets.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.chat_bubble_outline,
-      tags: ['Story', 'Gameplay'],
-    ),
-    RoadmapItem(
-      title: 'Math Module & Memory Management v1.0',
-      description:
-          'Mutable Vec2 type for zero-allocation physics, Quadtree spatial indexing, ObjectPool, and multi-tier CacheManager.',
-      status: 'Completed',
-      quarter: 'Q1 2026',
-      icon: Icons.calculate,
-      tags: ['Performance', 'Core'],
-    ),
-
-    // Q2 2026
-    RoadmapItem(
-      title: 'Documentation Overhaul',
-      description:
-          'Comprehensive API docs, tutorials, and video guides for all subsystems.',
-      status: 'In Progress',
-      quarter: 'Q2 2026',
-      icon: Icons.menu_book,
-      tags: ['Docs', 'Community'],
-    ),
-
-    // Q3 2026
-    RoadmapItem(
-      title: 'Networking Module',
-      description:
-          'Real-time multiplayer support with WebSocket and UDP backends, client prediction, and lag compensation.',
-      status: 'Planned',
-      quarter: 'Q3 2026',
-      icon: Icons.wifi,
-      tags: ['Networking', 'Multiplayer'],
-    ),
-    RoadmapItem(
-      title: 'Visual Scripting',
-      description:
-          'Node-based visual scripting system for rapid prototyping and non-programmer friendly game logic.',
-      status: 'Planned',
-      quarter: 'Q3 2026',
-      icon: Icons.account_tree,
-      tags: ['Tools', 'Scripting'],
-    ),
-    RoadmapItem(
-      title: 'AI & Pathfinding',
-      description:
-          'Built-in A* pathfinding, behavior trees, and state machines for game AI.',
-      status: 'Planned',
-      quarter: 'Q3 2026',
-      icon: Icons.psychology,
-      tags: ['AI', 'Gameplay'],
-    ),
-
-    // Q4 2026
-    RoadmapItem(
-      title: '3D Support (Experimental)',
-      description:
-          'Basic 3D rendering support with mesh loading, lighting, and perspective cameras.',
-      status: 'Planned',
-      quarter: 'Q4 2026',
-      icon: Icons.view_in_ar,
-      tags: ['3D', 'Experimental'],
-    ),
-    RoadmapItem(
-      title: 'Console Export',
-      description:
-          'Export support for Nintendo Switch, PlayStation, and Xbox platforms.',
-      status: 'Planned',
-      quarter: 'Q4 2026',
-      icon: Icons.sports_esports,
-      tags: ['Platform', 'Console'],
-    ),
-    RoadmapItem(
-      title: 'Engine Editor v2.0',
-      description:
-          'Full-featured visual editor with scene editing, prefab system, and asset management.',
-      status: 'Planned',
-      quarter: 'Q4 2026',
-      icon: Icons.edit,
-      tags: ['Tools', 'Editor'],
+          'The first release: the game loop, rendering, sprites, animation, '
+          'particles, physics, ECS, input, assets and audio.',
+      tags: ['Engine'],
     ),
   ];
 }

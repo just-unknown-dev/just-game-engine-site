@@ -11,6 +11,22 @@
 part of 'app_router.dart';
 
 /// generated route for
+/// [CliView]
+class CliRoute extends PageRouteInfo<void> {
+  const CliRoute({List<PageRouteInfo>? children})
+    : super(CliRoute.name, initialChildren: children);
+
+  static const String name = 'CliRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const CliView();
+    },
+  );
+}
+
+/// generated route for
 /// [DocsView]
 class DocsRoute extends PageRouteInfo<DocsRouteArgs> {
   DocsRoute({Key? key, String? section, List<PageRouteInfo>? children})
@@ -56,6 +72,22 @@ class DocsRouteArgs {
 
   @override
   int get hashCode => key.hashCode ^ section.hashCode;
+}
+
+/// generated route for
+/// [EditorView]
+class EditorRoute extends PageRouteInfo<void> {
+  const EditorRoute({List<PageRouteInfo>? children})
+    : super(EditorRoute.name, initialChildren: children);
+
+  static const String name = 'EditorRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const EditorView();
+    },
+  );
 }
 
 /// generated route for

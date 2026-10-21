@@ -3,131 +3,136 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../core/constants/engine_data.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
+import '../../../core/constants/features_data.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/theme/app_type.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../core/widgets/section_header.dart';
+import '../../../core/widgets/cards.dart';
+import '../../../core/widgets/layout.dart';
 import '../cubit/features_cubit.dart';
 import '../cubit/features_state.dart';
 
 @RoutePage()
-class FeaturesView extends StatelessWidget {
+class FeaturesView extends StatefulWidget {
   const FeaturesView({super.key});
 
   @override
+  State<FeaturesView> createState() => _FeaturesViewState();
+}
+
+class _FeaturesViewState extends State<FeaturesView> {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      FirebaseAnalytics.instance.logEvent(
+        name: 'screen_view',
+        parameters: {'screen_name': 'features'},
+      );
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
-    FirebaseAnalytics.instance.logEvent(
-      name: 'screen_view',
-      parameters: {'screen_name': 'features'},
-    );
     return BlocProvider(
       create: (_) => FeaturesCubit(),
-      child: const AppScaffold(child: _FeaturesBody()),
+      child: const AppScaffold(children: [_Header(), _Areas(), _ToolsBand()]),
     );
   }
 }
 
-class _FeaturesBody extends StatelessWidget {
-  const _FeaturesBody();
-
-  static const _categories = [
-    'All',
-    'Core Systems',
-    'Visual',
-    'Gameplay',
-    'Utilities',
-  ];
+class _Header extends StatelessWidget {
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobileOrSmaller;
+    final compact = context.isMobileOrSmaller;
+    return GlowBackdrop(
+      child: PageSection(
+        top: compact ? 48 : 80,
+        bottom: 8,
+        child: const SectionHeading(
+          eyebrow: 'Features',
+          title: 'Every part of Just Game Engine 2.0.',
+          subtitle:
+              'Each area is a set of components and systems in one ECS world. '
+              'Start with the default systems, add the rest as your game needs '
+              'them, and opt into 3D.',
+          large: true,
+        ),
+      ),
+    );
+  }
+}
 
+class _Areas extends StatelessWidget {
+  const _Areas();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
     return BlocBuilder<FeaturesCubit, FeaturesState>(
       builder: (context, state) {
-        final filtered = state.filterCategory == 'All'
-            ? EngineData.subsystems
-            : EngineData.subsystems
-                  .where((s) => s.category == state.filterCategory)
-                  .toList();
+        final categories = [FeaturesState.all, ...FeatureCategory.all];
+        final shown = state.filterCategory == FeaturesState.all
+            ? FeatureCategory.all
+            : [state.filterCategory];
 
-        return Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 16 : 48,
-            vertical: isMobile ? 24 : 48,
-          ),
+        return PageSection(
+          top: 32,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionHeader(
-                title: 'features',
-                subtitle:
-                    '11 major subsystems — everything you need to build games with Flutter.',
-              ),
-              // ── Filter chips ───────────────────────────────
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: _categories.map((cat) {
-                  final isSelected = state.filterCategory == cat;
-                  return ChoiceChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      context.read<FeaturesCubit>().filterByCategory(cat);
-                    },
-                    selectedColor: AppColors.accent.withOpacity(0.2),
-                    labelStyle: isSelected
-                        ? AppTextStyles.label.copyWith(color: AppColors.accent)
-                        : AppTextStyles.label,
-                    side: BorderSide(
-                      color: isSelected ? AppColors.accent : AppColors.border,
+                children: [
+                  for (final c in categories)
+                    ChoiceChip(
+                      label: Text(c),
+                      selected: c == state.filterCategory,
+                      showCheckmark: false,
+                      onSelected: (_) =>
+                          context.read<FeaturesCubit>().filterByCategory(c),
+                      labelStyle: t.label.copyWith(
+                        fontSize: 13.5,
+                        color: c == state.filterCategory
+                            ? p.accentText
+                            : p.textSecondary,
+                      ),
+                      backgroundColor: p.surface,
+                      selectedColor: p.accentSoft,
+                      side: BorderSide(
+                        color: c == state.filterCategory
+                            ? p.accent.withValues(alpha: 0.5)
+                            : p.border,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
-                  );
-                }).toList(),
+                ],
               ),
-              const SizedBox(height: 32),
-              // ── Feature cards grid ─────────────────────────
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth > 900
-                      ? 3
-                      : constraints.maxWidth > 600
-                      ? 2
-                      : 1;
-
-                  // Group cards into rows for equal height
-                  final rows = <List<EngineSubsystem>>[];
-                  for (var i = 0; i < filtered.length; i += crossAxisCount) {
-                    rows.add(filtered.skip(i).take(crossAxisCount).toList());
-                  }
-
-                  return Column(
-                    children: rows.map((row) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: row.asMap().entries.map((entry) {
-                              final isLast = entry.key == row.length - 1;
-                              return Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.only(
-                                    right: isLast ? 0 : 20,
-                                  ),
-                                  child: _FeatureCard(subsystem: entry.value),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+              for (final category in shown) ...[
+                const SizedBox(height: 48),
+                Row(
+                  children: [
+                    Text(category, style: t.h2.copyWith(fontSize: 24)),
+                    const SizedBox(width: 14),
+                    Expanded(child: Divider(color: p.border)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                CardGrid(
+                  children: [
+                    for (final area in FeaturesData.areas)
+                      if (area.category == category) _AreaCard(area: area),
+                  ],
+                ),
+              ],
             ],
           ),
         );
@@ -136,127 +141,96 @@ class _FeaturesBody extends StatelessWidget {
   }
 }
 
-class _FeatureCard extends StatefulWidget {
-  final EngineSubsystem subsystem;
-  const _FeatureCard({required this.subsystem});
+class _AreaCard extends StatelessWidget {
+  const _AreaCard({required this.area});
 
-  @override
-  State<_FeatureCard> createState() => _FeatureCardState();
-}
-
-class _FeatureCardState extends State<_FeatureCard> {
-  bool _hovering = false;
+  final FeatureArea area;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        transform: Matrix4.identity()..translate(0.0, _hovering ? -4.0 : 0.0),
-        decoration: BoxDecoration(
-          color: _hovering ? AppColors.surfaceBright : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _hovering
-                ? AppColors.accent.withOpacity(0.5)
-                : AppColors.border,
+    final t = context.type;
+    final p = context.palette;
+    return HoverCard(
+      url: area.docsPath,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconBadge(area.icon),
+              const Spacer(),
+              if (area.optIn) const Pill(label: 'Opt-in', dot: false),
+            ],
           ),
+          const SizedBox(height: 20),
+          Text(area.name, style: t.h3.copyWith(fontSize: 19)),
+          const SizedBox(height: 8),
+          Text(area.summary, style: t.bodySmall),
+          const SizedBox(height: 16),
+          CheckList(area.highlights),
+          const Spacer(),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Read the docs',
+                style: t.label.copyWith(fontSize: 14, color: p.accentText),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.arrow_forward_rounded, size: 15, color: p.accentText),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolsBand extends StatelessWidget {
+  const _ToolsBand();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
+    return PageSection(
+      top: 0,
+      child: Container(
+        padding: EdgeInsets.all(context.isMobileOrSmaller ? 24 : 40),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: p.border),
         ),
-        child: InkWell(
-          onTap: () {
-            context.router.pushPath('/docs/${widget.subsystem.id}');
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Icon + Category ──────────────────────
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        widget.subsystem.icon,
-                        color: AppColors.accent,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.subsystem.name,
-                            style: AppTextStyles.headlineSmall,
-                          ),
-                          Text(
-                            widget.subsystem.category,
-                            style: AppTextStyles.label,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 14,
-                      color: _hovering ? AppColors.accent : AppColors.textMuted,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // ── Description ──────────────────────────
-                Text(
-                  widget.subsystem.shortDescription,
-                  style: AppTextStyles.bodyMedium,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 16),
-                // ── Feature bullets ──────────────────────
-                ...widget.subsystem.features
-                    .take(4)
-                    .map(
-                      (f) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: AppColors.accent,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                f,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-              ],
-            ),
+        child: SplitRow(
+          start: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('More than an engine.', style: t.h2.copyWith(fontSize: 28)),
+              const SizedBox(height: 10),
+              Text(
+                'Lay out levels in the editor, and let the CLI create, run, '
+                'check and upgrade your game.',
+                style: t.body,
+              ),
+            ],
+          ),
+          end: const Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.end,
+            children: [
+              AppButton(
+                label: 'The editor',
+                url: '/editor',
+                trailingIcon: Icons.arrow_forward_rounded,
+              ),
+              AppButton.secondary(
+                label: 'The CLI',
+                url: '/cli',
+                trailingIcon: Icons.arrow_forward_rounded,
+              ),
+            ],
           ),
         ),
       ),

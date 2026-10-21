@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,11 +18,19 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Just Game Engine — a comprehensive 2D game engine built for Flutter with ECS, physics, rendering, and more.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Just Game Engine: a Flutter game engine built on ECS, with opt-in 3D graphics and physics, a level editor that runs inside your game, and the just CLI. Open source under BSD-3.">
+  <meta name="theme-color" content="#080B17">
+
+  <!-- Social previews -->
+  <meta property="og:title" content="Just Game Engine">
+  <meta property="og:description" content="A Flutter game engine that thinks in systems. Engine, editor and CLI, open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://engine.justunknown.com/">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Just Game Engine">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -32,11 +40,33 @@
   <title>Just Game Engine</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Match the visitor's saved theme before Flutter starts (same key as
+       lib/app/core/theme/theme_storage.dart). -->
+  <script>
+    try {
+      if (localStorage.getItem('jge:theme') === 'light') {
+        document.documentElement.classList.add('light');
+      }
+    } catch (e) {}
+  </script>
+
   <style>
+    :root {
+      --bg: #080B17;
+      --accent: #F5746F;
+      --muted: rgba(238, 240, 247, 0.5);
+    }
+
+    :root.light {
+      --bg: #F7F7FA;
+      --accent: #EF5F59;
+      --muted: rgba(17, 19, 28, 0.5);
+    }
+
     body {
       margin: 0;
       padding: 0;
-      background-color: #0a0a0f;
+      background-color: var(--bg);
       overflow: hidden;
     }
 
@@ -50,7 +80,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      background-color: #0a0a0f;
+      background-color: var(--bg);
       z-index: 9999;
       transition: opacity 0.3s ease-out;
     }
@@ -61,10 +91,10 @@
     }
 
     .spinner {
-      width: 48px;
-      height: 48px;
-      border: 3px solid rgba(245, 116, 111, 0.1);
-      border-top-color: #F5746F;
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(245, 116, 111, 0.12);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -73,20 +103,24 @@
       to { transform: rotate(360deg); }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation-duration: 3s; }
+    }
+
     .loading-text {
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-top: 24px;
-      letter-spacing: 1px;
+      color: var(--muted);
+      margin-top: 22px;
+      letter-spacing: 0.5px;
     }
   </style>
 </head>
 <body>
   <!-- Loading screen -->
-  <div id="loader" class="loader-container">
+  <div id="loader" class="loader-container" role="status" aria-live="polite">
     <div class="spinner"></div>
-    <div class="loading-text">Loading Please Wait...</div>
+    <div class="loading-text">Loading Just Game Engine…</div>
   </div>
 
   <script>
@@ -99,8 +133,8 @@
     }
 
     window.addEventListener('flutter-first-frame', hideLoader);
-    
-    // Fallback: hide after 10 seconds if event doesn't fire
+
+    // Fallback: hide after 10 seconds if the event doesn't fire.
     setTimeout(hideLoader, 10000);
   </script>
   <script src="flutter_bootstrap.js" async></script>

@@ -1,25 +1,16 @@
 import 'package:equatable/equatable.dart';
 
-/// State for the Features page.
+/// State for the Features page: which category is shown.
 class FeaturesState extends Equatable {
-  final String? selectedSubsystemId;
+  const FeaturesState({this.filterCategory = all});
+
+  static const all = 'All';
+
   final String filterCategory;
 
-  const FeaturesState({this.selectedSubsystemId, this.filterCategory = 'All'});
-
-  FeaturesState copyWith({
-    String? selectedSubsystemId,
-    String? filterCategory,
-    bool clearSelection = false,
-  }) {
-    return FeaturesState(
-      selectedSubsystemId: clearSelection
-          ? null
-          : (selectedSubsystemId ?? this.selectedSubsystemId),
-      filterCategory: filterCategory ?? this.filterCategory,
-    );
-  }
+  FeaturesState copyWith({String? filterCategory}) =>
+      FeaturesState(filterCategory: filterCategory ?? this.filterCategory);
 
   @override
-  List<Object?> get props => [selectedSubsystemId, filterCategory];
+  List<Object?> get props => [filterCategory];
 }

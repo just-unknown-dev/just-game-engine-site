@@ -2,12 +2,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-/// A full-screen animated background representing a game studio atmosphere.
-/// Features drifting particles, a soft ambient glow, subtle scanlines,
-/// and a quiet vignette — all at low intensity to stay out of the way of UI.
+import '../../../../core/theme/app_palette.dart';
+
+/// The hero's animated backdrop: drifting coral particles that move aside
+/// for the pointer, a slow breathing glow, and faint scanlines in the dark
+/// theme. Kept low-key so the text stays the focus.
 class AnimatedStudioBackground extends StatefulWidget {
-  final Widget child;
   const AnimatedStudioBackground({super.key, required this.child});
+
+  final Widget child;
 
   @override
   State<AnimatedStudioBackground> createState() =>
@@ -18,64 +21,63 @@ class _AnimatedStudioBackgroundState extends State<AnimatedStudioBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final List<_Particle> _particles;
-  Offset? _cursor; // normalised [0..1] in both axes
+  final _cursor = ValueNotifier<Offset?>(null); // normalised [0..1]
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 20),
+      duration: const Duration(seconds: 24),
     )..repeat();
-
     final rng = Random(42);
-    _particles = List.generate(70, (_) => _Particle.random(rng));
+    _particles = List.generate(64, (_) => _Particle.random(rng));
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _cursor.dispose();
     super.dispose();
+  }
+
+  void _track(Offset global) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final local = box.globalToLocal(global);
+    _cursor.value = Offset(
+      (local.dx / box.size.width).clamp(0.0, 1.0),
+      (local.dy / box.size.height).clamp(0.0, 1.0),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final palette = context.palette;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return MouseRegion(
-      onHover: (e) => setState(() {
-        final box = context.findRenderObject() as RenderBox;
-        final local = box.globalToLocal(e.position);
-        _cursor = Offset(
-          (local.dx / box.size.width).clamp(0.0, 1.0),
-          (local.dy / box.size.height).clamp(0.0, 1.0),
-        );
-      }),
-      onExit: (_) => setState(() => _cursor = null),
+      onHover: (e) => _track(e.position),
+      onExit: (_) => _cursor.value = null,
       child: Listener(
-        onPointerMove: (e) {
-          final box = context.findRenderObject() as RenderBox;
-          final local = box.globalToLocal(e.position);
-          setState(() {
-            _cursor = Offset(
-              (local.dx / box.size.width).clamp(0.0, 1.0),
-              (local.dy / box.size.height).clamp(0.0, 1.0),
-            );
-          });
-        },
-        onPointerUp: (_) => setState(() => _cursor = null),
-        onPointerCancel: (_) => setState(() => _cursor = null),
         behavior: HitTestBehavior.translucent,
+        onPointerMove: (e) => _track(e.position),
+        onPointerUp: (_) => _cursor.value = null,
+        onPointerCancel: (_) => _cursor.value = null,
+        // The painting fills whatever size the child takes, so the hero can
+        // have a fixed height (desktop) or size to its content (mobile).
         child: Stack(
-          fit: StackFit.expand,
           children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (_, __) => CustomPaint(
-                painter: _StudioPainter(
-                  progress: _controller.value,
-                  particles: _particles,
-                  color: color,
-                  cursor: _cursor,
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: _StudioPainter(
+                    animation: reduceMotion
+                        ? const AlwaysStoppedAnimation(0.3)
+                        : _controller,
+                    cursor: _cursor,
+                    particles: _particles,
+                    palette: palette,
+                  ),
                 ),
               ),
             ),
@@ -87,16 +89,7 @@ class _AnimatedStudioBackgroundState extends State<AnimatedStudioBackground>
   }
 }
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-
 class _Particle {
-  final double x; // normalised [0..1]
-  final double y; // normalised [0..1]
-  final double speed; // fraction of screen height per full cycle
-  final double size;
-  final double opacity;
-  final double phase; // sine sway phase offset
-
   const _Particle({
     required this.x,
     required this.y,
@@ -110,73 +103,80 @@ class _Particle {
     x: rng.nextDouble(),
     y: rng.nextDouble(),
     speed: 0.04 + rng.nextDouble() * 0.10,
-    size: 2.0 + rng.nextDouble() * 4.0,
-    opacity: 0.18 + rng.nextDouble() * 0.40,
+    size: 1.6 + rng.nextDouble() * 3.4,
+    opacity: 0.18 + rng.nextDouble() * 0.42,
     phase: rng.nextDouble() * 2 * pi,
   );
+
+  final double x;
+  final double y;
+  final double speed;
+  final double size;
+  final double opacity;
+  final double phase;
 }
 
-// ─── Painter ─────────────────────────────────────────────────────────────────
-
 class _StudioPainter extends CustomPainter {
-  final double progress;
-  final List<_Particle> particles;
-  final Color color;
-  final Offset? cursor;
-
-  const _StudioPainter({
-    required this.progress,
+  _StudioPainter({
+    required this.animation,
+    required this.cursor,
     required this.particles,
-    required this.color,
-    this.cursor,
-  });
+    required this.palette,
+  }) : super(repaint: Listenable.merge([animation, cursor]));
+
+  final Animation<double> animation;
+  final ValueNotifier<Offset?> cursor;
+  final List<_Particle> particles;
+  final AppPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // ── Background ───────────────────────────────────────────────
+    final rect = Offset.zero & size;
+    final progress = animation.value;
+    final accent = palette.accent;
+    final dark = palette.isDark;
+
+    // Base: the page colour, a touch lighter towards the top right.
     canvas.drawRect(
-      Offset.zero & size,
+      rect,
       Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF07070F), Color(0xFF0C0C1C), Color(0xFF060610)],
-          stops: [0.0, 0.55, 1.0],
-        ).createShader(Offset.zero & size),
+        ..shader = LinearGradient(
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+          colors: [palette.bg, palette.bg, palette.bgElevated],
+          stops: const [0, 0.55, 1],
+        ).createShader(rect),
     );
 
-    // ── Soft ambient glow (breathes slowly) ──────────────────────
+    // A coral glow behind the logo card, breathing slowly.
     final breathe = 0.5 + 0.5 * sin(progress * 2 * pi);
     canvas.drawRect(
-      Offset.zero & size,
+      rect,
       Paint()
         ..shader = RadialGradient(
-          center: const Alignment(0, -0.15),
-          radius: 0.75,
+          center: const Alignment(0.62, -0.1),
+          radius: 0.9,
           colors: [
-            color.withOpacity(0.07 + breathe * 0.04),
-            Colors.transparent,
+            accent.withValues(alpha: (dark ? 0.13 : 0.10) + breathe * 0.04),
+            accent.withValues(alpha: 0),
           ],
-        ).createShader(Offset.zero & size),
+        ).createShader(rect),
     );
 
-    // ── Drifting particles ───────────────────────────────────────
-    const repelRadius = 0.14; // normalised influence radius
-    const repelStrength = 0.06; // max push amount (normalised)
-    final particlePaint = Paint()..style = PaintingStyle.fill;
+    // Drifting particles.
+    const repelRadius = 0.14;
+    const repelStrength = 0.06;
+    final c = cursor.value;
+    final paint = Paint();
     for (final p in particles) {
-      // Drift upward and wrap
       final rawY = (p.y - progress * p.speed) % 1.0;
       final y = rawY < 0 ? rawY + 1.0 : rawY;
-      // Gentle horizontal sway
-      final rawX = p.x + 0.015 * sin(progress * 2 * pi * 1.5 + p.phase);
-      var nx = rawX % 1.0;
+      var nx = (p.x + 0.015 * sin(progress * 2 * pi * 1.5 + p.phase)) % 1.0;
       var ny = y;
 
-      // Cursor repulsion
-      if (cursor != null) {
-        final dx = nx - cursor!.dx;
-        final dy = ny - cursor!.dy;
+      if (c != null) {
+        final dx = nx - c.dx;
+        final dy = ny - c.dy;
         final dist = sqrt(dx * dx + dy * dy);
         if (dist < repelRadius && dist > 0) {
           final force = (1.0 - dist / repelRadius) * repelStrength;
@@ -185,45 +185,49 @@ class _StudioPainter extends CustomPainter {
         }
       }
 
-      // Fade in and out as particle completes its loop
       const fadeBand = 0.08;
-      final fadeOpacity =
+      final fade =
           (y < fadeBand
                   ? y / fadeBand
-                  : y > (1.0 - fadeBand)
-                  ? (1.0 - y) / fadeBand
+                  : y > 1 - fadeBand
+                  ? (1 - y) / fadeBand
                   : 1.0)
               .clamp(0.0, 1.0);
 
       canvas.drawCircle(
         Offset(nx * size.width, ny * size.height),
         p.size,
-        particlePaint
-          ..color = color.withOpacity(p.opacity * fadeOpacity * 0.60),
+        paint
+          ..color = accent.withValues(
+            alpha: p.opacity * fade * (dark ? 0.55 : 0.45),
+          ),
       );
     }
 
-    // ── Scanlines — very faint CRT / display nod ─────────────────
-    final scanPaint = Paint()
-      ..color = Colors.black.withOpacity(0.10)
-      ..strokeWidth = 1.0;
-    for (double y = 0; y < size.height; y += 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), scanPaint);
+    if (dark) {
+      // Faint scanlines, a nod to old displays.
+      final scan = Paint()
+        ..color = Colors.black.withValues(alpha: 0.08)
+        ..strokeWidth = 1;
+      for (double y = 0; y < size.height; y += 4) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), scan);
+      }
     }
 
-    // ── Vignette ─────────────────────────────────────────────────
+    // Fade the edges into the page so the hero has no hard border.
     canvas.drawRect(
-      Offset.zero & size,
+      rect,
       Paint()
-        ..shader = RadialGradient(
-          center: Alignment.center,
-          radius: 1.0,
-          colors: [Colors.transparent, Colors.black.withOpacity(0.72)],
-        ).createShader(Offset.zero & size),
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [palette.bg.withValues(alpha: 0), palette.bg],
+          stops: const [0.72, 1],
+        ).createShader(rect),
     );
   }
 
   @override
   bool shouldRepaint(_StudioPainter old) =>
-      old.progress != progress || old.color != color || old.cursor != cursor;
+      old.palette != palette || old.particles != particles;
 }

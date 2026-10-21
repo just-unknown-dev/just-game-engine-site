@@ -1,29 +1,19 @@
 import 'package:equatable/equatable.dart';
 
-/// State for the Docs page.
+/// State for the Docs page: the page shown and the sidebar search.
 class DocsState extends Equatable {
+  const DocsState({required this.currentSection, this.searchQuery = ''});
+
   final String currentSection;
   final String searchQuery;
-  final Set<String> expandedApiSections;
 
-  const DocsState({
-    this.currentSection = 'getting-started',
-    this.searchQuery = '',
-    this.expandedApiSections = const {},
-  });
-
-  DocsState copyWith({
-    String? currentSection,
-    String? searchQuery,
-    Set<String>? expandedApiSections,
-  }) {
+  DocsState copyWith({String? currentSection, String? searchQuery}) {
     return DocsState(
       currentSection: currentSection ?? this.currentSection,
       searchQuery: searchQuery ?? this.searchQuery,
-      expandedApiSections: expandedApiSections ?? this.expandedApiSections,
     );
   }
 
   @override
-  List<Object?> get props => [currentSection, searchQuery, expandedApiSections];
+  List<Object?> get props => [currentSection, searchQuery];
 }

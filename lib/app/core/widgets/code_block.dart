@@ -1,132 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_text_styles.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_type.dart';
+import 'code_highlighter.dart';
 
-/// A styled code block with syntax highlighting for Dart code.
-///
-/// Supports copy-to-clipboard, optional title, and optional line numbers.
-class CodeBlock extends StatefulWidget {
-  final String code;
-  final String? title;
-  final bool showLineNumbers;
-  final bool showCopyButton;
-
+/// A dark code panel with syntax colours, a header and a copy button.
+/// Code panels stay dark in the light theme too.
+class CodeBlock extends StatelessWidget {
   const CodeBlock({
     super.key,
     required this.code,
+    this.language = 'dart',
     this.title,
-    this.showLineNumbers = true,
-    this.showCopyButton = true,
+    this.showLineNumbers = false,
+    this.showHeader = true,
   });
 
-  @override
-  State<CodeBlock> createState() => _CodeBlockState();
-}
+  final String code;
 
-class _CodeBlockState extends State<CodeBlock> {
-  bool _copied = false;
-
-  Future<void> _copyToClipboard() async {
-    await Clipboard.setData(ClipboardData(text: widget.code));
-    setState(() => _copied = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _copied = false);
-  }
+  /// `dart`, `yaml`, `bash`, `json` or `text`.
+  final String language;
+  final String? title;
+  final bool showLineNumbers;
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
-    final lines = widget.code.split('\n');
+    final p = context.palette;
+    final t = context.type;
+    final lines = code.trimRight().split('\n');
+    final highlighter = CodeHighlighter(language, base: t.code);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.codeBg,
-        border: Border.all(color: AppColors.codeBorder),
-        borderRadius: BorderRadius.circular(8),
+        color: p.codeBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.codeBorder),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header ─────────────────────────────────────
-          if (widget.title != null || widget.showCopyButton)
+          if (showHeader)
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(7)),
-                border: Border(bottom: BorderSide(color: AppColors.codeBorder)),
+              padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+              decoration: BoxDecoration(
+                color: p.codeHeader,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(11),
+                ),
+                border: Border(bottom: BorderSide(color: p.codeBorder)),
               ),
               child: Row(
                 children: [
-                  if (widget.title != null)
-                    Text(
-                      widget.title!,
-                      style: AppTextStyles.codeSmall.copyWith(
-                        color: AppColors.textMuted,
-                      ),
+                  Expanded(
+                    child: Text(
+                      title ?? language,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.code.copyWith(fontSize: 12, color: p.codeMuted),
                     ),
-                  const Spacer(),
-                  if (widget.showCopyButton)
-                    InkWell(
-                      onTap: _copyToClipboard,
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _copied ? Icons.check : Icons.copy,
-                              size: 14,
-                              color: _copied
-                                  ? AppColors.success
-                                  : AppColors.textMuted,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _copied ? 'Copied!' : 'Copy',
-                              style: AppTextStyles.codeSmall.copyWith(
-                                color: _copied
-                                    ? AppColors.success
-                                    : AppColors.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  ),
+                  CopyButton(text: code.trimRight()),
                 ],
               ),
             ),
-          // ── Code body ─────────────────────────────────
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (int i = 0; i < lines.length; i++)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.showLineNumbers)
-                        SizedBox(
-                          width: 40,
-                          child: Text(
-                            '${i + 1}',
-                            style: AppTextStyles.codeSmall.copyWith(
-                              color: AppColors.textMuted.withOpacity(0.5),
+          Scrollbar(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < lines.length; i++)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (showLineNumbers)
+                          SizedBox(
+                            width: 34,
+                            child: Text(
+                              '${i + 1}',
+                              textAlign: TextAlign.right,
+                              style: t.code.copyWith(
+                                color: p.codeMuted.withValues(alpha: 0.6),
+                              ),
                             ),
-                            textAlign: TextAlign.right,
                           ),
+                        if (showLineNumbers) const SizedBox(width: 18),
+                        Text.rich(
+                          TextSpan(
+                            children: highlighter.line(lines[i]),
+                            style: t.code,
+                          ),
+                          softWrap: false,
                         ),
-                      if (widget.showLineNumbers) const SizedBox(width: 16),
-                      _SyntaxHighlightedLine(line: lines[i]),
-                    ],
-                  ),
-              ],
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -135,240 +107,80 @@ class _CodeBlockState extends State<CodeBlock> {
   }
 }
 
-/// Simple Dart syntax highlighter.
-class _SyntaxHighlightedLine extends StatelessWidget {
-  final String line;
-  const _SyntaxHighlightedLine({required this.line});
+/// A one-line shell command with a `$` prompt and a copy button.
+class CommandLine extends StatelessWidget {
+  const CommandLine(this.command, {super.key, this.prompt = r'$'});
+
+  final String command;
+  final String prompt;
 
   @override
   Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(children: _highlight(line), style: AppTextStyles.code),
+    final p = context.palette;
+    final t = context.type;
+    final highlighter = CodeHighlighter('bash', base: t.code);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: p.codeBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.codeBorder),
+      ),
+      child: Row(
+        children: [
+          Text('$prompt ', style: t.code.copyWith(color: p.codeMuted)),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text.rich(
+                TextSpan(children: highlighter.line(command), style: t.code),
+                softWrap: false,
+              ),
+            ),
+          ),
+          CopyButton(text: command),
+        ],
+      ),
     );
   }
+}
 
-  static const _keywords = {
-    'import',
-    'export',
-    'class',
-    'extends',
-    'implements',
-    'with',
-    'abstract',
-    'final',
-    'const',
-    'var',
-    'void',
-    'int',
-    'double',
-    'String',
-    'bool',
-    'dynamic',
-    'Future',
-    'async',
-    'await',
-    'return',
-    'if',
-    'else',
-    'for',
-    'while',
-    'do',
-    'switch',
-    'case',
-    'break',
-    'continue',
-    'new',
-    'this',
-    'super',
-    'null',
-    'true',
-    'false',
-    'static',
-    'late',
-    'required',
-    'override',
-    'enum',
-    'mixin',
-    'typedef',
-    'is',
-    'as',
-    'in',
-    'get',
-    'set',
-    'part',
-    'library',
-    'show',
-    'hide',
-    'factory',
-    'operator',
-  };
+/// Copies [text] and briefly shows a check mark.
+class CopyButton extends StatefulWidget {
+  const CopyButton({super.key, required this.text});
 
-  static const _builtInTypes = {
-    'Widget',
-    'BuildContext',
-    'State',
-    'StatelessWidget',
-    'StatefulWidget',
-    'MaterialApp',
-    'Scaffold',
-    'Container',
-    'Column',
-    'Row',
-    'Text',
-    'Offset',
-    'Size',
-    'Color',
-    'Colors',
-    'EdgeInsets',
-    'BoxDecoration',
-    'BorderRadius',
-    'Icon',
-    'Engine',
-    'GameLoop',
-    'TimeManager',
-    'SystemManager',
-    'RenderingEngine',
-    'Camera',
-    'CircleRenderable',
-    'RectangleRenderable',
-    'LineRenderable',
-    'TextRenderable',
-    'CustomRenderable',
-    'Sprite',
-    'SpriteSheet',
-    'NineSliceSprite',
-    'SpriteAnimation',
-    'PositionTween',
-    'RotationTween',
-    'ScaleTween',
-    'OpacityTween',
-    'ColorTween',
-    'AnimationSequence',
-    'AnimationGroup',
-    'Easings',
-    'ParticleEmitter',
-    'Particle',
-    'ParticleEffects',
-    'PhysicsEngine',
-    'PhysicsBody',
-    'SceneEditor',
-    'Scene',
-    'SceneNode',
-    'World',
-    'Entity',
-    'Component',
-    'System',
-    'TransformComponent',
-    'VelocityComponent',
-    'RenderableComponent',
-    'PhysicsBodyComponent',
-    'HealthComponent',
-    'MovementSystem',
-    'RenderSystem',
-    'PhysicsSystemECS',
-    'InputManager',
-    'KeyboardInput',
-    'MouseInput',
-    'TouchInput',
-    'ControllerInput',
-    'AssetManager',
-    'ImageAsset',
-    'AudioAsset',
-    'TextAsset',
-    'JsonAsset',
-    'BinaryAsset',
-    'AssetBundle',
-    'AudioEngine',
-    'AudioClip',
-    'SoundEffectManager',
-    'MusicManager',
-    'AudioMixer',
-    'AudioChannel',
-    'GameWidget',
-    'LogicalKeyboardKey',
-    'MouseButton',
-    'GamepadButton',
-  };
+  final String text;
 
-  List<TextSpan> _highlight(String text) {
-    final spans = <TextSpan>[];
-    final buffer = StringBuffer();
+  @override
+  State<CopyButton> createState() => _CopyButtonState();
+}
 
-    // Handle comments
-    if (text.trimLeft().startsWith('//')) {
-      return [
-        TextSpan(
-          text: text,
-          style: TextStyle(color: AppColors.textMuted.withOpacity(0.6)),
-        ),
-      ];
-    }
+class _CopyButtonState extends State<CopyButton> {
+  bool _copied = false;
 
-    // Handle strings
-    final regex = RegExp(
-      r"""('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\b\w+\b|[^\w\s]|\s+)""",
-    );
-
-    for (final match in regex.allMatches(text)) {
-      final token = match.group(0)!;
-
-      if (token.startsWith("'") || token.startsWith('"')) {
-        _flushBuffer(buffer, spans);
-        spans.add(
-          TextSpan(
-            text: token,
-            style: const TextStyle(color: Color(0xFFCE9178)),
-          ),
-        );
-      } else if (_keywords.contains(token)) {
-        _flushBuffer(buffer, spans);
-        spans.add(
-          TextSpan(
-            text: token,
-            style: const TextStyle(color: Color(0xFF569CD6)),
-          ),
-        );
-      } else if (_builtInTypes.contains(token)) {
-        _flushBuffer(buffer, spans);
-        spans.add(
-          TextSpan(
-            text: token,
-            style: const TextStyle(color: Color(0xFF4EC9B0)),
-          ),
-        );
-      } else if (RegExp(r'^\d+\.?\d*$').hasMatch(token)) {
-        _flushBuffer(buffer, spans);
-        spans.add(
-          TextSpan(
-            text: token,
-            style: const TextStyle(color: Color(0xFFB5CEA8)),
-          ),
-        );
-      } else if (token == '(' ||
-          token == ')' ||
-          token == '{' ||
-          token == '}' ||
-          token == '[' ||
-          token == ']') {
-        _flushBuffer(buffer, spans);
-        spans.add(
-          TextSpan(
-            text: token,
-            style: TextStyle(color: AppColors.textMuted),
-          ),
-        );
-      } else {
-        buffer.write(token);
-      }
-    }
-    _flushBuffer(buffer, spans);
-    return spans;
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.text));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    if (mounted) setState(() => _copied = false);
   }
 
-  void _flushBuffer(StringBuffer buffer, List<TextSpan> spans) {
-    if (buffer.isNotEmpty) {
-      spans.add(TextSpan(text: buffer.toString()));
-      buffer.clear();
-    }
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return IconButton(
+      onPressed: _copy,
+      tooltip: _copied ? 'Copied' : 'Copy',
+      visualDensity: VisualDensity.compact,
+      iconSize: 16,
+      style: IconButton.styleFrom(
+        hoverColor: Colors.white.withValues(alpha: 0.06),
+      ),
+      icon: Icon(
+        _copied ? Icons.check_rounded : Icons.content_copy_rounded,
+        color: _copied ? const Color(0xFF4ADE80) : p.codeMuted,
+      ),
+    );
   }
 }

@@ -1,12 +1,12 @@
 {
-    "name": "just_game_engine_site",
-    "short_name": "just_game_engine_site",
+    "name": "Just Game Engine",
+    "short_name": "Just Game Engine",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#080B17",
+    "theme_color": "#F5746F",
+    "description": "A Flutter game engine built on ECS, with an in-game level editor and the just CLI.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

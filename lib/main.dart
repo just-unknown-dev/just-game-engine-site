@@ -1,11 +1,13 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_game_engine_site/app/core/services/remote_config_service.dart';
-import 'package:just_game_engine_site/app/core/theme/app_colors.dart';
+import 'package:just_game_engine_site/app/core/theme/app_palette.dart';
 import 'package:just_game_engine_site/app/core/theme/app_theme.dart';
+import 'package:just_game_engine_site/app/core/theme/theme_cubit.dart';
 import 'package:just_game_engine_site/app/routes/app_router.dart';
 
 import 'firebase_options.dart';
@@ -16,12 +18,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
 
-  // Fix 2: Disable runtime font fetching initially
+  // Fonts are fetched once, up front, while the loader shows.
   GoogleFonts.config.allowRuntimeFetching = false;
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   RemoteConfigService.instance.initialize();
-  runApp(const MyApp());
+  runApp(BlocProvider(create: (_) => ThemeCubit(), child: const MyApp()));
 }
 
 class MyApp extends StatefulWidget {
@@ -37,68 +39,70 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    _loadFonts();
   }
 
-  Future<void> _initializeApp() async {
-    // Pre-cache fonts while showing loader
+  /// Every family and weight the site uses, so text doesn't swap fonts
+  /// after the first frame.
+  Future<void> _loadFonts() async {
     GoogleFonts.config.allowRuntimeFetching = true;
-    await GoogleFonts.pendingFonts([
-      GoogleFonts.majorMonoDisplay(),
-      GoogleFonts.spaceGrotesk(),
-      GoogleFonts.firaCode(),
-    ]);
-    GoogleFonts.config.allowRuntimeFetching = false;
-
-    if (mounted) {
-      setState(() => _isReady = true);
+    try {
+      await GoogleFonts.pendingFonts([
+        GoogleFonts.majorMonoDisplay(),
+        GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w500),
+        GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600),
+        GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700),
+        GoogleFonts.inter(),
+        GoogleFonts.inter(fontWeight: FontWeight.w500),
+        GoogleFonts.inter(fontWeight: FontWeight.w600),
+        GoogleFonts.inter(fontWeight: FontWeight.w700),
+        GoogleFonts.firaCode(),
+      ]);
+    } catch (e) {
+      // A font that fails to load falls back to the system font.
+      debugPrint('Font preload failed: $e');
     }
+    GoogleFonts.config.allowRuntimeFetching = false;
+    if (mounted) setState(() => _isReady = true);
   }
 
   @override
   Widget build(BuildContext context) {
+    final mode = context.watch<ThemeCubit>().state;
     return MaterialApp.router(
       title: 'Just Game Engine',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: mode,
+      themeAnimationDuration: const Duration(milliseconds: 220),
       routerConfig: _appRouter.config(),
       builder: (context, child) {
-        // Fix 6: Show loading indicator while fonts load
-        if (!_isReady) {
-          return const _AppLoader();
-        }
+        if (!_isReady) return const _AppLoader();
         return child ?? const SizedBox.shrink();
       },
     );
   }
 }
 
-/// Loading indicator shown during app initialization
+/// Shown while fonts load; matches the HTML loader in web/index.html.
 class _AppLoader extends StatelessWidget {
   const _AppLoader();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bgDark,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Loading...',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-          ],
+    final p = context.palette;
+    return ColoredBox(
+      color: p.bg,
+      child: Center(
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            color: p.accent,
+            backgroundColor: p.accent.withValues(alpha: 0.12),
+          ),
         ),
       ),
     );

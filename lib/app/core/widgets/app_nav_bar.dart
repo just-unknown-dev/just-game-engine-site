@@ -1,260 +1,181 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../services/remote_config_service.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_text_styles.dart';
+import '../constants/site.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_type.dart';
+import '../theme/theme_cubit.dart';
+import '../utils/open_link.dart';
 import '../utils/responsive.dart';
+import 'layout.dart';
+import 'logo.dart';
 
-/// Top navigation bar used across all pages.
-class AppNavBar extends StatelessWidget implements PreferredSizeWidget {
-  const AppNavBar({super.key});
+class NavItem {
+  const NavItem(this.label, this.route, {this.match, required this.icon});
 
-  static const navItems = [
-    NavItem('Home', '/'),
-    NavItem('Roadmap', '/roadmap'),
-    NavItem('Features', '/features'),
+  final String label;
+  final String route;
+
+  /// Path prefix that marks the item active; defaults to [route].
+  final String? match;
+  final IconData icon;
+
+  bool isActive(String path) => path.startsWith(match ?? route);
+}
+
+/// The bar at the top of every page.
+class AppNavBar extends StatelessWidget {
+  const AppNavBar({super.key, this.maxWidth = kContentWidth});
+
+  /// How wide its content gets; pages with a wider grid (the docs) pass
+  /// theirs so the logo lines up with their first column.
+  final double maxWidth;
+
+  static const height = 68.0;
+
+  static const items = [
+    NavItem('Features', '/features', icon: Icons.widgets_outlined),
+    NavItem('Editor', '/editor', icon: Icons.design_services_outlined),
+    NavItem('CLI', '/cli', icon: Icons.terminal_rounded),
+    NavItem(
+      'Docs',
+      '/docs/introduction',
+      match: '/docs',
+      icon: Icons.menu_book_outlined,
+    ),
+    NavItem('Roadmap', '/roadmap', icon: Icons.timeline_rounded),
   ];
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
-
-  @override
   Widget build(BuildContext context) {
-    final currentPath = context.router.currentPath;
-    final isMobile = context.isMobileOrSmaller;
+    final p = context.palette;
+    final compact = context.isMobileOrSmaller;
+    final path = context.router.currentPath;
 
     return Container(
-      height: 64,
-      decoration: BoxDecoration(color: AppColors.bgDark.withOpacity(0.50)),
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
-      child: Row(
-        children: [
-          // ── Logo ──────────────────────────────────────────
-          InkWell(
-            onTap: () => context.router.pushPath('/'),
-            hoverColor: Colors.transparent,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('assets/icons/plus.png', width: 24, height: 24),
-                const SizedBox(width: 4),
-                Image.asset('assets/icons/cross.png', width: 24, height: 24),
-                if (!isMobile) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    'Just Game Engine',
-                    style: AppTextStyles.displaySmall.copyWith(fontSize: 16),
-                  ),
-                ],
+      height: height,
+      decoration: BoxDecoration(
+        color: p.bg.withValues(alpha: 0.92),
+        border: Border(
+          bottom: BorderSide(color: p.border.withValues(alpha: 0.7)),
+        ),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Row(
+            children: [
+              const _Brand(),
+              const Spacer(),
+              if (!compact) ...[
+                for (final item in items)
+                  _NavLink(item: item, active: item.isActive(path)),
+                const SizedBox(width: 12),
+                _IconAction(
+                  icon: Icons.code_rounded,
+                  tooltip: 'GitHub',
+                  onTap: () => openLink(context, Links.engineRepo),
+                ),
               ],
-            ),
+              const _ThemeToggle(),
+              if (compact)
+                _IconAction(
+                  icon: Icons.menu_rounded,
+                  tooltip: 'Menu',
+                  onTap: () => _openMenu(context, path),
+                ),
+            ],
           ),
-          const Spacer(),
-
-          // ── Desktop nav links ────────────────────────────
-          if (!isMobile) ...[
-            for (final item in navItems)
-              _NavLink(
-                label: item.label,
-                route: item.route,
-                isActive: _isActive(currentPath, item.route),
-              ),
-            if (RemoteConfigService.instance.showEngineEditorButton)
-              _EngineEditor(),
-          ],
-
-          // ── Mobile hamburger menu ────────────────────────
-          if (isMobile)
-            IconButton(
-              icon: const Icon(Icons.menu, color: AppColors.textPrimary),
-              onPressed: () => _showMobileMenu(context, currentPath),
-            ),
-        ],
+        ),
       ),
     );
   }
 
-  void _showMobileMenu(BuildContext context, String currentPath) {
-    showModalBottomSheet(
+  void _openMenu(BuildContext context, String path) {
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.bgDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _MobileNavMenu(currentPath: currentPath),
+      showDragHandle: true,
+      builder: (sheet) => _MobileMenu(path: path, pageContext: context),
     );
   }
-
-  static bool _isActive(String currentPath, String route) {
-    if (route == '/') return currentPath == '/';
-    return currentPath.startsWith(route);
-  }
 }
 
-/// Data class for navigation items - made public for reuse.
-class NavItem {
-  final String label;
-  final String route;
-  const NavItem(this.label, this.route);
-}
-
-/// Mobile navigation menu shown as bottom sheet.
-class _MobileNavMenu extends StatelessWidget {
-  final String currentPath;
-
-  const _MobileNavMenu({required this.currentPath});
+class _Brand extends StatelessWidget {
+  const _Brand();
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppColors.textMuted,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Nav items
-            for (final item in AppNavBar.navItems)
-              _MobileNavItem(
-                item: item,
-                isActive: AppNavBar._isActive(currentPath, item.route),
-              ),
-            const Divider(color: AppColors.border, height: 24),
-            // Editor button if available
-            if (RemoteConfigService.instance.showEngineEditorButton)
-              ListTile(
-                leading: const Icon(Icons.launch, color: AppColors.accentLight),
-                title: Text(
-                  'Engine Editor',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.accentLight,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  launchUrl(
-                    Uri.parse('https://editor.engine.justunknown.com/'),
-                  );
-                },
-              ),
-          ],
+    return Semantics(
+      link: true,
+      label: 'Just Game Engine home',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => context.router.navigatePath('/'),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const LogoTiles(tileSize: 13, gap: 2),
+              const SizedBox(width: 12),
+              Text('Just Game Engine', style: context.type.wordmark),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _MobileNavItem extends StatelessWidget {
-  final NavItem item;
-  final bool isActive;
-
-  const _MobileNavItem({required this.item, required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        _getIconForRoute(item.route),
-        color: isActive ? AppColors.accent : AppColors.textSecondary,
-      ),
-      title: Text(
-        item.label,
-        style: isActive
-            ? AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.accent,
-                fontWeight: FontWeight.w600,
-              )
-            : AppTextStyles.bodyMedium,
-      ),
-      trailing: isActive
-          ? Container(
-              width: 4,
-              height: 24,
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            )
-          : null,
-      onTap: () {
-        Navigator.pop(context);
-        context.router.pushPath(item.route);
-      },
-    );
-  }
-
-  IconData _getIconForRoute(String route) {
-    switch (route) {
-      case '/':
-        return Icons.home_outlined;
-      case '/features':
-        return Icons.widgets_outlined;
-      case '/examples':
-        return Icons.code;
-      case '/roadmap':
-        return Icons.timeline;
-      default:
-        return Icons.article_outlined;
-    }
-  }
-}
-
 class _NavLink extends StatefulWidget {
-  final String label;
-  final String route;
-  final bool isActive;
+  const _NavLink({required this.item, required this.active});
 
-  const _NavLink({
-    required this.label,
-    required this.route,
-    required this.isActive,
-  });
+  final NavItem item;
+  final bool active;
 
   @override
   State<_NavLink> createState() => _NavLinkState();
 }
 
 class _NavLinkState extends State<_NavLink> {
-  bool _hovering = false;
+  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
+    final p = context.palette;
+    final lit = widget.active || _hover;
+    return Semantics(
+      link: true,
+      selected: widget.active,
       child: InkWell(
-        onTap: () => context.router.pushPath(widget.route),
+        onTap: () => context.router.navigatePath(widget.item.route),
+        onHover: (h) => setState(() => _hover = h),
+        borderRadius: BorderRadius.circular(8),
         hoverColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: widget.isActive
-                    ? AppColors.accent
-                    : _hovering
-                    ? AppColors.accent.withOpacity(0.4)
-                    : Colors.transparent,
-                width: 2,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.item.label,
+                style: context.type.nav.copyWith(
+                  color: lit ? p.textPrimary : p.textSecondary,
+                  fontWeight: widget.active ? FontWeight.w600 : null,
+                ),
               ),
-            ),
-          ),
-          child: Text(
-            widget.label,
-            style: widget.isActive
-                ? AppTextStyles.navLinkActive
-                : AppTextStyles.navLink,
+              const SizedBox(height: 5),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 2,
+                width: widget.active ? 18 : (_hover ? 10 : 0),
+                decoration: BoxDecoration(
+                  color: p.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -262,22 +183,105 @@ class _NavLinkState extends State<_NavLink> {
   }
 }
 
-class _EngineEditor extends StatelessWidget {
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () =>
-          launchUrl(Uri.parse('https://editor.engine.justunknown.com/')),
-      borderRadius: BorderRadius.circular(4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.border),
-          borderRadius: BorderRadius.circular(4),
+    final p = context.palette;
+    return IconButton(
+      onPressed: onTap,
+      tooltip: tooltip,
+      iconSize: 20,
+      style: IconButton.styleFrom(
+        foregroundColor: p.textSecondary,
+        hoverColor: p.surfaceAlt,
+      ),
+      icon: Icon(icon),
+    );
+  }
+}
+
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = context.watch<ThemeCubit>().isDark;
+    return _IconAction(
+      icon: dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+      tooltip: dark ? 'Switch to light theme' : 'Switch to dark theme',
+      onTap: () => context.read<ThemeCubit>().toggle(),
+    );
+  }
+}
+
+class _MobileMenu extends StatelessWidget {
+  const _MobileMenu({required this.path, required this.pageContext});
+
+  final String path;
+
+  /// The page's context: the sheet's own is gone once it closes.
+  final BuildContext pageContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final t = context.type;
+
+    void go(String url) {
+      Navigator.of(context).pop();
+      openLink(pageContext, url);
+    }
+
+    Widget tile(
+      IconData icon,
+      String label,
+      String url, {
+      bool active = false,
+    }) {
+      return ListTile(
+        leading: Icon(icon, color: active ? p.accent : p.textSecondary),
+        title: Text(
+          label,
+          style: t.label.copyWith(
+            color: active ? p.accentText : p.textPrimary,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
-        child: Text(
-          'Editor',
-          style: AppTextStyles.label.copyWith(color: AppColors.accentLight),
+        trailing: isExternal(url)
+            ? Icon(Icons.north_east_rounded, size: 16, color: p.textMuted)
+            : null,
+        onTap: () => go(url),
+      );
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            tile(Icons.home_outlined, 'Home', '/', active: path == '/'),
+            for (final item in AppNavBar.items)
+              tile(
+                item.icon,
+                item.label,
+                item.route,
+                active: item.isActive(path),
+              ),
+            Divider(color: p.border, height: 20, indent: 16, endIndent: 16),
+            tile(Icons.code_rounded, 'GitHub', Links.engineRepo),
+            tile(Icons.forum_outlined, 'Discord', Links.discord),
+          ],
         ),
       ),
     );

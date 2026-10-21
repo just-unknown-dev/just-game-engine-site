@@ -1,77 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:just_game_engine_site/app/core/theme/app_colors.dart';
-import 'package:just_game_engine_site/app/core/widgets/section_header.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:just_game_engine_site/app/core/theme/app_palette.dart';
+import 'package:just_game_engine_site/app/core/theme/app_theme.dart';
+import 'package:just_game_engine_site/app/core/theme/theme_cubit.dart';
 import 'package:just_game_engine_site/app/core/widgets/code_block.dart';
+import 'package:just_game_engine_site/app/core/widgets/code_highlighter.dart';
+import 'package:just_game_engine_site/app/core/widgets/markdown_view.dart';
+
+Widget _app(Widget child) => MaterialApp(
+  theme: AppTheme.dark,
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
 
 void main() {
-  group('SectionHeader', () {
-    testWidgets('renders title text', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: SectionHeader(title: 'Test Title')),
-        ),
-      );
-      expect(find.text('Test Title'), findsOneWidget);
-    });
-
-    testWidgets('renders optional subtitle', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SectionHeader(title: 'T', subtitle: 'Sub text'),
-          ),
-        ),
-      );
-      expect(find.text('Sub text'), findsOneWidget);
-    });
-  });
+  // Tests have no network: render with the fallback font.
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   group('CodeBlock', () {
-    testWidgets('renders as RichText with code', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: CodeBlock(code: 'void main() {}')),
-        ),
-      );
-      // CodeBlock renders code via RichText with TextSpans
-      expect(find.byType(RichText), findsWidgets);
+    testWidgets('renders the code and a copy button', (tester) async {
+      await tester.pumpWidget(_app(const CodeBlock(code: 'void main() {}')));
+      expect(find.textContaining('main', findRichText: true), findsWidgets);
+      expect(find.byIcon(Icons.content_copy_rounded), findsOneWidget);
     });
 
-    testWidgets('shows copy button via InkWell with Icon', (tester) async {
+    testWidgets('shows the title in the header', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: CodeBlock(code: 'print("hello");')),
-        ),
+        _app(const CodeBlock(code: 'x', title: 'lib/main.dart')),
       );
-      expect(find.byType(InkWell), findsWidgets);
-      expect(find.byIcon(Icons.copy), findsOneWidget);
+      expect(find.text('lib/main.dart'), findsOneWidget);
     });
   });
 
-  group('AppColors', () {
-    test('accent is coral red (#F5746F)', () {
-      expect(AppColors.accent, const Color(0xFFF5746F));
+  group('CodeHighlighter', () {
+    const base = TextStyle();
+
+    test('colours Dart keywords and types', () {
+      final spans = CodeHighlighter(
+        'dart',
+        base: base,
+      ).line('final e = Engine();');
+      final keyword = spans.firstWhere((s) => s.text == 'final');
+      final type = spans.firstWhere((s) => s.text == 'Engine');
+      expect(keyword.style?.color, CodeHighlighter.keyword);
+      expect(type.style?.color, CodeHighlighter.type);
     });
 
-    test('bgDark is defined', () {
-      expect(AppColors.bgDark, isA<Color>());
+    test('colours a shell command and its comment', () {
+      final spans = CodeHighlighter(
+        'bash',
+        base: base,
+      ).line('just game run   # with the editor');
+      expect(spans.first.style?.color, CodeHighlighter.command);
+      expect(spans.last.style?.color, CodeHighlighter.comment);
     });
 
-    test('surface color is defined', () {
-      expect(AppColors.surface, isA<Color>());
+    test('colours YAML keys', () {
+      final spans = CodeHighlighter(
+        'yaml',
+        base: base,
+      ).line('  just_game_engine: ^2.0.0-dev.2');
+      expect(
+        spans.any(
+          (s) =>
+              s.text == 'just_game_engine' &&
+              s.style?.color == CodeHighlighter.type,
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('MarkdownView', () {
+    const source = '''
+## Install it
+
+Add **the engine** with `flutter pub add`. See [the docs](/docs/ecs).
+
+- one
+- two
+  continued
+
+### Details
+
+```dart lib/main.dart
+void main() {}
+```
+
+> **Note:** a callout.
+
+| Name | Value |
+|---|---|
+| `a \\| b` | 1 |
+
+## Next part
+''';
+
+    test('outline lists the ## headings with slugs', () {
+      final outline = MarkdownView.outline(source);
+      expect(outline.map((h) => h.text), ['Install it', 'Next part']);
+      expect(outline.map((h) => h.slug), ['install-it', 'next-part']);
     });
 
-    test('textPrimary is defined', () {
-      expect(AppColors.textPrimary, isA<Color>());
+    testWidgets('renders every block kind', (tester) async {
+      await tester.pumpWidget(_app(const MarkdownView(source)));
+      expect(find.text('Install it'), findsOneWidget);
+      expect(find.text('Details'), findsOneWidget);
+      expect(find.text('lib/main.dart'), findsOneWidget);
+      expect(find.byType(CodeBlock), findsOneWidget);
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline_rounded), findsOneWidget);
+      expect(
+        find.textContaining('two continued', findRichText: true),
+        findsOneWidget,
+      );
     });
 
-    test('codeBg is defined', () {
-      expect(AppColors.codeBg, isA<Color>());
+    test('slugify makes URL-friendly ids', () {
+      expect(slugify('Engine & lifecycle'), 'engine-lifecycle');
+      expect(slugify('`GameWidget` options'), 'gamewidget-options');
+    });
+  });
+
+  group('Theme', () {
+    test('the dark palette keeps the brand coral', () {
+      expect(AppPalette.dark.accent, const Color(0xFFF5746F));
+      expect(AppPalette.dark.isDark, isTrue);
+      expect(AppPalette.light.isDark, isFalse);
     });
 
-    test('border is defined', () {
-      expect(AppColors.border, isA<Color>());
+    test('both themes carry their palette', () {
+      expect(AppTheme.dark.extension<AppPalette>(), AppPalette.dark);
+      expect(AppTheme.light.extension<AppPalette>(), AppPalette.light);
+    });
+
+    test('ThemeCubit starts dark and toggles', () {
+      final cubit = ThemeCubit();
+      expect(cubit.state, ThemeMode.dark);
+      cubit.toggle();
+      expect(cubit.state, ThemeMode.light);
+      cubit.toggle();
+      expect(cubit.state, ThemeMode.dark);
+      cubit.close();
     });
   });
 }

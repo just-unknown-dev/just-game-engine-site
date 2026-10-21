@@ -1,16 +1,18 @@
 # Just Game Engine Site
 
-Official website for [Just Game Engine](https://github.com/just-unknown-dev/just-game-engine) — a comprehensive 2D game engine built for Flutter.
+Official website for [Just Game Engine](https://github.com/just-unknown-dev/just-game-engine): a Flutter game engine, its [level editor](https://github.com/just-unknown-dev/just-game-engine-editor) and the [`just` CLI](https://github.com/just-unknown-dev/just-game-engine-cli).
 
 **Live site:** [engine.justunknown.com](https://engine.justunknown.com)
 
 ## Features
 
-- **Home** — Overview, feature highlights, and Flame comparison
-- **Features** — Detailed breakdown of all 11 engine subsystems
-- **Docs** — API documentation and getting started guide
-- **Examples** — Interactive code examples
-- **Roadmap** — Development timeline and planned features
+- **Home** (`/`): the 2.0 preview, showcase screenshots, the toolkit, what's new, subsystems and getting started
+- **Features** (`/features`): every engine area, filterable by category
+- **Editor** (`/editor`): tour, features, setup and shortcuts for `just_game_engine_editor`
+- **CLI** (`/cli`): the `just` commands, how they keep a project safe, flags and exit codes
+- **Docs** (`/docs/<page>`): 29 guide pages written for 2.0, with search and an "On this page" outline
+- **Roadmap** (`/roadmap`): shipped, in-progress and next work, built from the changelogs
+- Light and dark themes; the choice is saved per visitor
 
 ## Tech Stack
 
@@ -68,19 +70,29 @@ lib/
 ├── firebase_options.dart
 └── app/
     ├── core/
-    │   ├── constants/      # Engine data (subsystems, examples, roadmap)
+    │   ├── constants/      # Site content: versions and links, features, roadmap
+    │   │   └── docs/       # One file per docs group, plus the index
     │   ├── services/       # Remote config
-    │   ├── theme/          # Colors, text styles, theme
-    │   ├── utils/          # Responsive utilities
-    │   └── widgets/        # Shared widgets (navbar, footer, scaffold)
+    │   ├── theme/          # Palettes (light/dark), text styles, theme cubit
+    │   ├── utils/          # Responsive helpers, link opening
+    │   └── widgets/        # Nav bar, footer, cards, code blocks, Markdown view
     ├── modules/
     │   ├── home/
     │   ├── features/
+    │   ├── editor/
+    │   ├── cli/
     │   ├── docs/
-    │   ├── examples/
     │   └── roadmap/
-    └── routes/             # Auto Route configuration
+    └── routes/             # Auto Route configuration (run build_runner after edits)
 ```
+
+## Updating content
+
+- **Versions and links**: `lib/app/core/constants/site.dart`. Every page reads them from there.
+- **Docs**: `lib/app/core/constants/docs/`. Each page is a `DocPage` whose body uses the small Markdown subset documented in `doc_models.dart`. Add a page to its group's list; `docs_index.dart` orders the groups, and `test/app/core/constants/docs_index_test.dart` checks that every internal link points at a real page.
+- **Features and roadmap**: `features_data.dart` and `roadmap_data.dart` in the same folder.
+- **Screenshots**: `assets/screenshots/`, as WebP (about 1600 px wide).
+- **Routes**: after changing `lib/app/routes/app_router.dart`, run `dart run build_runner build --delete-conflicting-outputs`.
 
 ## Links
 

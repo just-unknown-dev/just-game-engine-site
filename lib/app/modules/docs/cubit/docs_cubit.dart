@@ -2,9 +2,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'docs_state.dart';
 
-/// Cubit managing the Docs page state.
+/// Cubit managing the Docs page: which page is open, and the search text.
+///
+/// The URL (`/docs/<id>`) is the source of truth; the view calls
+/// [navigateToSection] when it changes.
 class DocsCubit extends Cubit<DocsState> {
-  DocsCubit({String initialSection = 'getting-started'})
+  DocsCubit({String initialSection = 'introduction'})
     : super(DocsState(currentSection: initialSection));
 
   void navigateToSection(String sectionId) {
@@ -15,13 +18,5 @@ class DocsCubit extends Cubit<DocsState> {
     emit(state.copyWith(searchQuery: query));
   }
 
-  void toggleApiSection(String sectionId) {
-    final expanded = Set<String>.from(state.expandedApiSections);
-    if (expanded.contains(sectionId)) {
-      expanded.remove(sectionId);
-    } else {
-      expanded.add(sectionId);
-    }
-    emit(state.copyWith(expandedApiSections: expanded));
-  }
+  void clearSearch() => search('');
 }

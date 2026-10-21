@@ -1,91 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'app_colors.dart';
+import 'app_palette.dart';
 
-/// Application theme for Just Game Engine website.
+/// Material themes built from [AppPalette].
 abstract final class AppTheme {
-  static ThemeData get dark {
-    final base = ThemeData.dark(useMaterial3: true);
+  static ThemeData get dark => _build(AppPalette.dark);
+  static ThemeData get light => _build(AppPalette.light);
+
+  static ThemeData _build(AppPalette p) {
+    final base = ThemeData(useMaterial3: true, brightness: p.brightness);
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: p.accent,
+          brightness: p.brightness,
+        ).copyWith(
+          primary: p.accent,
+          onPrimary: p.onAccent,
+          secondary: p.accent,
+          surface: p.surface,
+          onSurface: p.textPrimary,
+          outline: p.border,
+        );
+
     return base.copyWith(
-      primaryColor: AppColors.accent,
-      scaffoldBackgroundColor: AppColors.bgDark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.accent,
-        brightness: Brightness.dark,
-        surface: AppColors.surface,
+      colorScheme: scheme,
+      primaryColor: p.accent,
+      scaffoldBackgroundColor: p.bg,
+      canvasColor: p.bg,
+      extensions: [p],
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+      hoverColor: p.accent.withValues(alpha: 0.06),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: p.accent,
+        selectionColor: p.accent.withValues(alpha: 0.28),
       ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.bgDark.withOpacity(0.9),
-        elevation: 0,
-        scrolledUnderElevation: 2,
-        surfaceTintColor: AppColors.accent.withOpacity(0.1),
-        titleTextStyle: GoogleFonts.majorMonoDisplay(
-          fontSize: 18,
-          color: AppColors.accent,
-          letterSpacing: 1,
+      textTheme: GoogleFonts.interTextTheme(
+        base.textTheme,
+      ).apply(bodyColor: p.textSecondary, displayColor: p.textPrimary),
+      dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
+      iconTheme: IconThemeData(color: p.textSecondary),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: p.isDark ? p.surfaceAlt : p.textPrimary,
+          borderRadius: BorderRadius.circular(6),
         ),
-      ),
-      cardTheme: CardThemeData(
-        color: AppColors.surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(140, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.spaceGrotesk(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.8,
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.accent,
-          minimumSize: const Size(140, 48),
-          side: const BorderSide(color: AppColors.accent),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: GoogleFonts.spaceGrotesk(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.8,
-          ),
-        ),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surface,
-        selectedColor: AppColors.accent.withOpacity(0.2),
-        side: const BorderSide(color: AppColors.border),
-        labelStyle: GoogleFonts.spaceGrotesk(
+        textStyle: GoogleFonts.inter(
           fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
+          color: p.isDark ? p.textPrimary : p.bg,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.border,
-        thickness: 1,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: p.surface,
+        isDense: true,
+        hintStyle: GoogleFonts.inter(fontSize: 14, color: p.textMuted),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: p.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: p.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: p.accent),
+        ),
       ),
-      textTheme: GoogleFonts.spaceGroteskTextTheme(base.textTheme).copyWith(
-        bodyLarge: GoogleFonts.spaceGrotesk(
-          color: AppColors.textPrimary,
-          fontSize: 16,
-          height: 1.6,
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(p.textMuted.withValues(alpha: 0.35)),
+        radius: const Radius.circular(8),
+        thickness: const WidgetStatePropertyAll(6),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: p.bgElevated,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
         ),
-        bodyMedium: GoogleFonts.spaceGrotesk(
-          color: AppColors.textSecondary,
-          fontSize: 14,
-          height: 1.5,
-        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: p.bgElevated,
+        surfaceTintColor: Colors.transparent,
       ),
     );
   }
